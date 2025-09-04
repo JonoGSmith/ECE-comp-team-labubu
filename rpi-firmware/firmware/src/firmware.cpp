@@ -10,15 +10,11 @@
 #define I2C_SDA 8
 #define I2C_SCL 9
 
-
-
-
-int main()
-{
+int main(){
     stdio_init_all();
 
     // Initialise the Wi-Fi chip
-    if (cyw43_arch_init()) {
+    if(cyw43_arch_init()){
         printf("Wi-Fi init failed\n");
         return -1;
     }
@@ -35,7 +31,7 @@ int main()
     // Example to turn on the Pico W LED
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
 
-    while (true) {
+    while(true){
         printf("Hello, world!\n");
         sleep_ms(1000);
     }
