@@ -4,9 +4,6 @@ set(CMAKE_C_STANDARD 23)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Initialise pico_sdk from installed location
-# (note this can come from environment, CMake cache etc)
-
 # == DO NOT EDIT THE FOLLOWING LINES for the Raspberry Pi Pico VS Code Extension to work ==
 if(WIN32)
     set(USERHOME $ENV{USERPROFILE})
@@ -30,19 +27,22 @@ project(firmware C CXX ASM)
 pico_sdk_init()
 
 # Source files
+file(GLOB_RECURSE SRC_C CONFIGURE_DEPENDS "src/*.c")
 file(GLOB_RECURSE SRC_CPP CONFIGURE_DEPENDS "src/*.cpp")
-add_executable(firmware ${SRC_CPP})
+add_executable(firmware ${SRC_C} ${SRC_CPP})
 
 pico_set_program_name(firmware "firmware")
 pico_set_program_version(firmware "0.1")
 
 # Modify the below lines to enable/disable output over UART/USB
+pico_enable_stdio_usb(firmware 1)
 pico_enable_stdio_uart(firmware 0)
-pico_enable_stdio_usb(firmware 0)
 
-target_link_libraries(firmware pico_stdlib)
-target_include_directories(firmware PRIVATE ${CMAKE_CURRENT_LIST_DIR})
-target_link_libraries(firmware hardware_i2c pico_cyw43_arch_none) # user libs
+target_include_directories(firmware PRIVATE "src/btstack/")
+target_link_libraries(firmware # user libs
+    pico_stdlib pico_cyw43_arch_none pico_btstack_ble pico_btstack_cyw43
+    hardware_adc hardware_dma hardware_pwm
+)
 
 pico_add_extra_outputs(firmware)
 
