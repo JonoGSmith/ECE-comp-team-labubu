@@ -1,0 +1,6 @@
+# Project
+build/
+
+# MacOS
+.DS_Store
+._*
