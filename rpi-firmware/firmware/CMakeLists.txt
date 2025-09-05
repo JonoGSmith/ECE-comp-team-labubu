@@ -48,8 +48,13 @@ target_link_libraries(firmware # user libs
     pico_stdlib pico_multicore pico_cyw43_arch_none
     hardware_adc hardware_dma hardware_pwm hardware_pio
     # pico_btstack_ble pico_btstack_cyw43
-    # tinyusb_device tinyusb_board
+    pico_unique_id pico_stdio_usb tinyusb_device tinyusb_board
 )
 
 pico_add_extra_outputs(firmware)
 
+add_definitions(
+  -DPICO_STDIO_USB_ENABLE_RESET_VIA_VENDOR_INTERFACE
+  -DPICO_STDIO_USB_RESET_INTERFACE_SUPPORT_RESET_TO_BOOTSEL
+  -DPICO_STDIO_USB_RESET_BOOTSEL_INTERFACE_DISABLE_MASK=0
+)

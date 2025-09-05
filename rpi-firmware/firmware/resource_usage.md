@@ -2,10 +2,11 @@
 - PINS: 0..=28 GPIO, of which 26..=28 can be analog
   - 1 analog pin (`mic_adc`)
   - 1 digital pin (neck `servo`)
+  - 3 digital pins (`i2s_dac`)
 
 - DMA: 12 available
   - 1 channel (`mic_adc` adc -> buffer)
-  - 1 channel (`i2s_dac` buffer -> pio)
+  - 2 channels (`i2s_dac` buffer -> pio, 2nd one TODO)
 
 - DMA Interrupts: 2 available
   - 0: (`i2s_dac`: on buffer empty)

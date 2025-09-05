@@ -31,7 +31,8 @@ namespace dev::mic{
             false // false = 16 bit, true = 8 bit
         );
 
-        adc_set_clkdiv((float)sys::cClockRate/SAMPLE_RATE);
+        constexpr auto clock_div = (f32)sys::cClockRate/SAMPLE_RATE;
+        adc_set_clkdiv(clock_div);
         // adc_set_temp_sensor_enabled(false); // hmm
 
         // Arm the DMA

@@ -27,7 +27,7 @@ void init(){
     set_obled(true); // Turn on the Pico W LED as proof of life.
 }
 
-int main(){
+int main2(){
     bool light_toggle = true;
     init();
 
