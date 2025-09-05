@@ -38,10 +38,12 @@ pico_set_program_version(firmware "0.1")
 pico_enable_stdio_usb(firmware 1)
 pico_enable_stdio_uart(firmware 0)
 
-target_include_directories(firmware PRIVATE "src/btstack/")
+target_include_directories(firmware PRIVATE "src/libcfg/")
 target_link_libraries(firmware # user libs
-    pico_stdlib pico_cyw43_arch_none pico_btstack_ble pico_btstack_cyw43
+    pico_stdlib pico_multicore pico_cyw43_arch_none
     hardware_adc hardware_dma hardware_pwm
+    # pico_btstack_ble pico_btstack_cyw43
+    # tinyusb_device tinyusb_board
 )
 
 pico_add_extra_outputs(firmware)

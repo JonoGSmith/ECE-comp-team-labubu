@@ -1,0 +1,172 @@
+#include "../common.hpp"
+#include "../endian.hpp"
+
+#include "tusb.h"
+#include "bsp/board_api.h"
+
+// Jonathan:
+// This file defines the callbacks required for TinyUSB to run correctly.
+// Of particular note, returning the USB Device Descriptor - which tells the host what kind of device we are.
+// We are effectively a 2 port usb splitter with a serial device and audio device attached.
+// That doesn't change, so the contents of the descriptor can be hardcoded constants.
+// ------------------------------------------------------------------------------------------------------
+
+/* A combination of interfaces must have a unique product id, since PC will save device driver after the first plug.
+ * Same VID/PID with different interface e.g MSC (first), then CDC (later) will possibly cause system error on PC.
+ *
+ * Auto ProductID layout's Bitmap:
+ *   [MSB]     AUDIO | MIDI | HID | MSC | CDC          [LSB]
+ */
+#define _PID_MAP(itf, n) ((CFG_TUD_##itf) << (n))
+constexpr u16 USB_PROD_ID = 0x4000 | _PID_MAP(CDC, 0) | _PID_MAP(MSC, 1) | _PID_MAP(HID, 2) | _PID_MAP(MIDI, 3) | _PID_MAP(AUDIO, 4) | _PID_MAP(VENDOR, 5);
+
+//--------------------------------------------------------------------+
+// Device Descriptors
+//--------------------------------------------------------------------+
+
+// String Descriptor Indives
+enum {
+    STRID_LANGID = 0,
+    STRID_MANUFACTURER,
+    STRID_PRODUCT,
+    STRID_SERIAL,
+    STRID_MIC,
+    STRID_SPEAKER,
+};
+
+constexpr tusb_desc_device_t desc_device = {
+    .bLength = sizeof(tusb_desc_device_t),
+    .bDescriptorType = TUSB_DESC_DEVICE,
+    .bcdUSB = 0x0200, // USB 2.0
+
+    // Use Interface Association Descriptor (IAD) for Audio
+    // As required by USB Specs IAD's subclass must be common class (2) and protocol must be IAD (1)
+    .bDeviceClass    = TUSB_CLASS_MISC,
+    .bDeviceSubClass = MISC_SUBCLASS_COMMON,
+    .bDeviceProtocol = MISC_PROTOCOL_IAD,
+    .bMaxPacketSize0 = 64,
+
+    .idVendor  = 0xCafe,
+    .idProduct = USB_PROD_ID,
+    .bcdDevice = 0x0100, // Device is version 1.0
+
+    .iManufacturer = STRID_MANUFACTURER,
+    .iProduct      = STRID_PRODUCT,
+    .iSerialNumber = STRID_SERIAL,
+
+    .bNumConfigurations = 0x01
+};
+
+template <size_t N> struct PACKED desc_string {
+    u8 length;
+    u8 constant_descriptor_type;
+    array<u16le, N> str;
+};
+template <size_t N> consteval auto desc_string_make(array<u16, N> langs){
+    auto d = desc_string<N>{};
+    d.length = sizeof(d);
+    d.constant_descriptor_type = TUSB_DESC_STRING;
+    d.str = langs;
+    return d;
+}
+template <size_t N> consteval auto desc_string_make(array<char16_t, N> langs){
+    array<u16, N> x = {};
+    for(size_t i = 0; i < langs.size(); i++){ x[i] = langs[i]; }
+    return desc_string_make(x);
+}
+
+//--------------------------------------------------------------------+
+// Configuration Descriptor
+//--------------------------------------------------------------------+
+enum ITF_NUMS { // Interface numbers
+    ITF_NUM_SERIAL_IN = 0,
+    ITF_NUM_SERIAL_OUT, // not directly referenced
+    #if CFG_TUD_AUDIO == 1
+        ITF_NUM_MIC_CONTROL,
+        ITF_NUM_MIC_STREAMING, // not directly referenced
+        ITF_NUM_SPEAKER_CONTROL,
+        ITF_NUM_SPEAKER_STREAMING, // not directly referenced
+    #endif
+    ITF_NUM_TOTAL
+};
+
+enum EP_OUTS { // Endpoints (destinations the host can send data to)
+    EP_SERIAL_OUT  = 2,
+    EP_SPEAKER_OUT = 3,
+};
+enum EP_IN {
+    EP_SERIAL_CMD = 0x81,
+    EP_SERIAL_IN  = 0x82,
+    EP_MIC_OUT    = 0x83,
+    EP_SPEAKER_FB = 0x84,
+};
+
+// Serial back and forth
+constexpr u8    SERIAL_MAX_CMD_SIZE = 8;
+constexpr u8    SERIAL_MAX_TRF_SIZE = 64;
+// Microphone to host
+constexpr u8    MIC_SAMPLE_BITS = 16;
+constexpr u8    MIC_SAMPLE_BYTES = (MIC_SAMPLE_BITS + 7) / 8;
+constexpr u16   MIC_MAX_FREQ = 32'000;
+constexpr auto  MIC_EPSIZE = TUD_AUDIO_EP_SIZE(MIC_MAX_FREQ, MIC_SAMPLE_BYTES, 1);
+// Host to speaker
+constexpr u8    AUD_SAMPLE_BITS = 16;
+constexpr u8    AUD_SAMPLE_BYTES = (AUD_SAMPLE_BITS + 7) / 8;
+constexpr u16   AUD_MAX_FREQ = 44'000;
+constexpr auto  AUD_EPSIZE = TUD_AUDIO_EP_SIZE(AUD_MAX_FREQ, AUD_SAMPLE_BYTES, 1);
+// Config
+constexpr u16 CONFIG_TOTAL_LEN = TUD_CONFIG_DESC_LEN
+                               + CFG_TUD_CDC * TUD_CDC_DESC_LEN
+                               + CFG_TUD_AUDIO * (TUD_AUDIO_MIC_ONE_CH_DESC_LEN + TUD_AUDIO_SPEAKER_MONO_FB_DESC_LEN);
+
+constexpr array<u8, CONFIG_TOTAL_LEN> desc_configuration = {
+    // Config number, interface count, string index, total length, attribute, power in mA
+    TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL, STRID_LANGID, CONFIG_TOTAL_LEN, 0x00, 100),
+    // Serial:
+    TUD_CDC_DESCRIPTOR(ITF_NUM_SERIAL_IN, STRID_SERIAL, EP_SERIAL_CMD, SERIAL_MAX_CMD_SIZE, EP_SERIAL_OUT, EP_SERIAL_IN, SERIAL_MAX_TRF_SIZE),
+    #if CFG_TUD_AUDIO == 1
+        // Audio Mic: Interface number, string index, EP Out & EP In address, EP size
+        TUD_AUDIO_MIC_ONE_CH_DESCRIPTOR(ITF_NUM_MIC_CONTROL, STRID_MIC, MIC_SAMPLE_BYTES, MIC_SAMPLE_BITS, EP_MIC_OUT, MIC_EPSIZE),
+        // Audio Speaker:
+        TUD_AUDIO_SPEAKER_MONO_FB_DESCRIPTOR(ITF_NUM_SPEAKER_STREAMING, STRID_SPEAKER, AUD_SAMPLE_BYTES, AUD_SAMPLE_BITS, EP_SPEAKER_OUT, AUD_EPSIZE, EP_SPEAKER_FB, 4)
+    #endif
+};
+
+// ----------------------------------------------
+// Callback Definitions
+// -----------------------------------------------
+
+// Invoked when received GET DEVICE DESCRIPTOR
+extern "C" u8 const* tud_descriptor_device_cb() {
+    return (u8 const*)&desc_device;
+}
+
+// Invoked when received GET CONFIGURATION DESCRIPTOR
+extern "C" u8 const* tud_descriptor_configuration_cb(uint8_t index) {
+    return desc_configuration.begin();
+}
+
+// Invoked when received GET STRING DESCRIPTOR request.
+// Returns a pointer to UTF16LE string with \0 terminator, whose contents must exist long enough for transfer to complete.
+extern "C" u16 const* tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
+    #define DO(msg) { \
+        static constexpr auto x = desc_string_make(u ## msg ## _arr); \
+        return (u16 const*)&x; \
+    }
+    switch(index) {
+        case STRID_LANGID:
+            static constexpr auto x = desc_string_make(array<u16, 1>{0x0409}); // English
+            return (u16 const*)&x;
+        case STRID_MANUFACTURER:
+            DO("StudentSquad");
+        case STRID_PRODUCT:
+            DO("SmartDoll");
+        case STRID_SERIAL:
+            DO("Doll CDC");
+        case STRID_MIC:
+            DO("UAC2 Mic");
+        case STRID_SPEAKER:
+            DO("UAC2 Speaker");
+    }
+    return nullptr;
+}

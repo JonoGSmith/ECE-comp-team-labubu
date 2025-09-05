@@ -22,6 +22,8 @@ using f64 = double;
 #define CONCAT(a, b) CONCATB(a, b)
 #define ANONYMOUS_VARIABLE CONCAT(CONCAT(ANON_, __COUNTER__), CONCAT(_LINE_, __LINE__))
 
+#define PACKED [[gnu::packed]]
+
 // Library essentials and shorthands
 // ------------------------------
 #include <string_view>
@@ -74,4 +76,10 @@ constexpr T clamp(const T& low, const T& val, const T& high) {
 }
 
 // Nicer reinterpret
-template<class To> To ptr_cast(auto* p){ return reinterpret_cast<To>(p); }
+template<class To> constexpr To ptr_cast(auto* p){ return reinterpret_cast<To>(p); }
+
+template<class T> constexpr auto ptr_to_const(T const& target) -> T const* { return &target; }
+
+template <typename CharT, CharT... Cs> consteval auto operator""_arr() {
+    return std::array<CharT, sizeof...(Cs)>{ Cs... };
+}
