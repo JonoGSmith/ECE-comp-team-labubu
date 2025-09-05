@@ -106,26 +106,26 @@ static void dma_double_buffer_init(pio_i2s* i2s, void (*dma_handler)(void)) {
                           false                          // Start immediately
     );
 
-    c = dma_channel_get_default_config(i2s->dma_ch_in_ctrl);
-    channel_config_set_read_increment(&c, true);
-    channel_config_set_write_increment(&c, false);
-    channel_config_set_ring(&c, false, 3);
-    channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
-    dma_channel_configure(i2s->dma_ch_in_ctrl, &c, &dma_hw->ch[i2s->dma_ch_in_data].al2_write_addr_trig, i2s->in_ctrl_blocks, 1, false);
-
-    c = dma_channel_get_default_config(i2s->dma_ch_in_data);
-    channel_config_set_read_increment(&c, false);
-    channel_config_set_write_increment(&c, true);
-    channel_config_set_chain_to(&c, i2s->dma_ch_in_ctrl);
-    channel_config_set_dreq(&c, pio_get_dreq(i2s->pio, i2s->sm_din, false));
-
-    dma_channel_configure(i2s->dma_ch_in_data,
-                          &c,
-                          NULL,                         // Will be set by ctrl chan
-                          &i2s->pio->rxf[i2s->sm_din],  // Source pointer
-                          STEREO_BUFFER_SIZE,           // Number of transfers
-                          false                         // Don't start yet
-    );
+//     c = dma_channel_get_default_config(i2s->dma_ch_in_ctrl);
+//     channel_config_set_read_increment(&c, true);
+//     channel_config_set_write_increment(&c, false);
+//     channel_config_set_ring(&c, false, 3);
+//     channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+//     dma_channel_configure(i2s->dma_ch_in_ctrl, &c, &dma_hw->ch[i2s->dma_ch_in_data].al2_write_addr_trig, i2s->in_ctrl_blocks, 1, false);
+//
+//     c = dma_channel_get_default_config(i2s->dma_ch_in_data);
+//     channel_config_set_read_increment(&c, false);
+//     channel_config_set_write_increment(&c, true);
+//     channel_config_set_chain_to(&c, i2s->dma_ch_in_ctrl);
+//     channel_config_set_dreq(&c, pio_get_dreq(i2s->pio, i2s->sm_din, false));
+//
+//     dma_channel_configure(i2s->dma_ch_in_data,
+//                           &c,
+//                           NULL,                         // Will be set by ctrl chan
+//                           &i2s->pio->rxf[i2s->sm_din],  // Source pointer
+//                           STEREO_BUFFER_SIZE,           // Number of transfers
+//                           false                         // Don't start yet
+//     );
 
     // Input channel triggers the DMA interrupt handler, hopefully these stay
     // in perfect sync with the output.

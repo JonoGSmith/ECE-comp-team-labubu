@@ -29,9 +29,7 @@ pico_sdk_init()
 # Source files
 file(GLOB_RECURSE SRC_C CONFIGURE_DEPENDS "src/*.c")
 file(GLOB_RECURSE SRC_CPP CONFIGURE_DEPENDS "src/*.cpp")
-add_executable(firmware ${SRC_C} ${SRC_CPP}
-    "libs/i2s_example/i2s/i2s.c"
-)
+add_executable(firmware ${SRC_C} ${SRC_CPP})
 
 pico_set_program_name(firmware "firmware")
 pico_set_program_version(firmware "0.1")
@@ -40,10 +38,10 @@ pico_set_program_version(firmware "0.1")
 pico_enable_stdio_usb(firmware 1)
 pico_enable_stdio_uart(firmware 0)
 
-pico_generate_pio_header(firmware "${CMAKE_CURRENT_LIST_DIR}/libs/i2s_example/i2s/i2s.pio")
+pico_generate_pio_header(firmware "${CMAKE_CURRENT_LIST_DIR}/src/dev/i2s.pio")
 
 target_include_directories(firmware PRIVATE "src/libcfg/"
-    "libs/incbin/" "libs/magic_enum/include" "libs/i2s_example/"
+    "libs/incbin/" "libs/magic_enum/include"
     "res/incbin/"
 )
 target_link_libraries(firmware # user libs

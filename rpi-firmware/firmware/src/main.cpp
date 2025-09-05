@@ -9,29 +9,42 @@
 #include "dev/usbuart.hpp"
 #include "dev/i2s_dac.hpp"
 
+void set_obled(bool on){
+    cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, on);
+}
+
 void init(){
     dev::usb::init();
-    dev::mic::init();
+    sleep_ms(1000); // Let the USB Host discover us...
+
     dev::servo::init();
+    // dev::mic::init();
     dev::dac::init();
 
     if(cyw43_arch_init()){ // Initialise the Wi-Fi chip
         printf("Wi-Fi init failed\n");
     }
-
-    cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1); // Turn on the Pico W LED as proof of life.
+    set_obled(true); // Turn on the Pico W LED as proof of life.
 }
 
 int main(){
+    bool light_toggle = true;
     init();
 
+    printf("Hello, world! Playing %d samples.\n", gTestAudioSize / sizeof(u16));
+    dev::dac::start();
     while(true){
-        printf("Hello, world!\n");
-        dev::servo::set_rotation_angle(-90);
-        sleep_ms(3000);
-        dev::servo::set_rotation_angle(0);
-        sleep_ms(3000);
-        dev::servo::set_rotation_angle(90);
-        sleep_ms(3000);
+        set_obled(light_toggle);
+        light_toggle = !light_toggle;
+
+        if(dev::dac::isDMA){
+            printf("DMA now %d\n", dev::dac::isDMA);
+            dev::dac::isDMA = 0;
+        }else{
+            printf("no dma...?\n");
+        }
+        //
+        sleep_ms(1000);
+        // dev::servo::set_rotation_angle(-90);
     }
 }

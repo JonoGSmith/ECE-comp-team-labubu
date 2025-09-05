@@ -67,6 +67,7 @@ struct DeferBuilder{
 #define defer auto ANONYMOUS_VARIABLE = defer_block
 
 // Utilities
+#include <algorithm>
 #include <utility>
 
 // Clamps in range (inclusive)
@@ -83,3 +84,8 @@ template<class T> constexpr auto ptr_to_const(T const& target) -> T const* { ret
 template <typename CharT, CharT... Cs> consteval auto operator""_arr() {
     return std::array<CharT, sizeof...(Cs)>{ Cs... };
 }
+
+// External libraries
+#define INCBIN_PREFIX // none
+#include <incbin.h>
+
