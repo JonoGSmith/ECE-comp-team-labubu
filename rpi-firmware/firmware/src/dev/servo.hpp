@@ -3,13 +3,13 @@
 #include <hardware/pwm.h>
 
 // For driving the servo that rotates the head/body of the doll.
-// SG90 9 g Micro Servo
-// All I control is a single GPIO PWM to rotate back and forth.
+// SG90 9 g Micro Servo.
+// All I control is a single GPIO PWM to determine the direction of rotation.
 // ------------------------------
 
 namespace dev::servo{
     namespace cfg{
-        constexpr u32 GPIO_PIN = 10;
+        constexpr u32 GPIO_PIN = 2;
         constexpr u32 FREQUENCY = 50;
 
         // This should give 0.1ms precision (10k divisions)
@@ -42,6 +42,7 @@ namespace dev::servo{
     }
 
     // -90 to 90 degrees. We don't appear to be able to control speed.
+    // NOTE: Currently this seems to only do half the angle.
     constexpr void set_rotation_angle(f32 degrees){
         using namespace cfg;
         f32 safe_degrees = clamp(-90.0f, degrees, 90.0f); // safety

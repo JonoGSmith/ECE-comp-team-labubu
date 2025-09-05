@@ -8,3 +8,6 @@
 
 - PWM: 8 available, 2 channels per
   - 1 slice (neck servo)
+
+- PIO Blocks: 2 blocks * 4 state machines
+  - 1 block (i2s_dac)
