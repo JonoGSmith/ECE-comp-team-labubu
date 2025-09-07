@@ -22,14 +22,17 @@ namespace dev::dac{
         };
 
         static constexpr auto make(s16 s){
-            return I2SAudioSample{.c = {s, s}};
+            return I2SAudioSample{.c = {s << 16, s << 16}};
+        }
+        static constexpr auto make_quiet(s16 s){
+            return I2SAudioSample{.c = {s << 11, s << 11}};
         }
     };
 
     constexpr u32 cI2SSampleRate = 48'000;
-    constexpr u8  cI2S_GPIO_DOUT = 3;
-    constexpr u8  cI2S_GPIO_BCK = 4;
-    constexpr u8  cI2S_GPIO_LCK = 5;
+    constexpr u8  cI2S_GPIO_DOUT = 18;
+    constexpr u8  cI2S_GPIO_BCK  = 16;
+    constexpr u8  cI2S_GPIO_LCK  = 17;
     static_assert(cI2S_GPIO_BCK + 1 == cI2S_GPIO_LCK, "Due to the PIO implementation, the BCK and LCK pins must be next to eachother.");
 
     constexpr u8  cI2SBitDepth   = 8 * sizeof(I2SAudioSample::c[0]);
@@ -54,7 +57,7 @@ namespace dev::dac{
         pio_sm_config sm_config = i2s_data_write_program_get_default_config(startAddr);
         sm_config_set_sideset_pins(&sm_config, cI2S_GPIO_BCK); // The BCK and LRCK pins must be next to eachother. They need no data.
         sm_config_set_out_pins(&sm_config, cI2S_GPIO_DOUT, 1);
-        sm_config_set_out_shift(&sm_config, false, false, 32); // shift register is 4 bytes
+        sm_config_set_out_shift(&sm_config, false, true, 32); // shift register is 4 bytes
         sm_config_set_fifo_join(&sm_config, PIO_FIFO_JOIN_TX); // fifo to the shift register is 8 bytes (this is the memory location we dma write to)
         pio_sm_init(pio, sm, startAddr, &sm_config);
 
@@ -65,7 +68,7 @@ namespace dev::dac{
         // Pins
         pio_gpio_init(pio, cI2S_GPIO_DOUT);
         pio_gpio_init(pio, cI2S_GPIO_BCK);
-        pio_gpio_init(pio, cI2S_GPIO_LCK + 1);
+        pio_gpio_init(pio, cI2S_GPIO_LCK);
         constexpr u32 pin_mask = (1 << cI2S_GPIO_DOUT) | (1 << cI2S_GPIO_BCK) | (1 << cI2S_GPIO_LCK);
         pio_sm_set_pins_with_mask(pio, sm, 0, pin_mask);  // zero output to start with
         pio_sm_set_pindirs_with_mask(pio, sm, pin_mask, pin_mask); // all outputs (1)
@@ -105,6 +108,8 @@ namespace dev::dac{
     inline void init(){
         auto const& pio = pio0; // chosen pio
         auto sm = init_pio(pio);
+        gI2SOutBufA.fill(I2SAudioSample{.l = 0, .r = 0}); // Quiet the buffers if they have static noise
+        gI2SOutBufA.fill(I2SAudioSample{.l = 0, .r = 0});
         init_dma(pio, sm); // set up dma to feed the state machine
         pio_sm_set_enabled(pio, sm, true); // Start the pio block. Empty I2S should be produced.
 

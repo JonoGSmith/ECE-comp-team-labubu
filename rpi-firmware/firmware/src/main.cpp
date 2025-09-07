@@ -2,6 +2,7 @@
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
 #include "pico/multicore.h"
+#include "pico/time.h"
 #include "bsp/board_api.h"
 #include "tusb.h"
 
@@ -16,10 +17,12 @@ void set_obled(bool on){
 
 void init(){
     dev::usb::init();
-    sleep_ms(1000); // Let the USB Host discover us...
+    while(to_ms_since_boot(get_absolute_time()) < 3000){ // Wait to connect device to PC - debugging.
+        dev::usb::tick();
+    }
 
     dev::servo::init();
-    // dev::mic::init();
+    dev::mic::init();
     dev::dac::init();
 
     if(cyw43_arch_init()){ // Initialise the Wi-Fi chip
@@ -34,19 +37,25 @@ int main(){
 
     printf("Hello, world! Playing %d samples.\n", gTestAudioSize / sizeof(u16));
     dev::dac::start();
-    while(true){
-        dev::usb::tick();
-        // Sleeping is now illegal.
 
-//         set_obled(light_toggle);
-//         light_toggle = !light_toggle;
-//
-//         if(dev::dac::isDMA){
-//             printf("DMA now %d\n", dev::dac::isDMA);
-//             dev::dac::isDMA = 0;
-//         }else{
-//             printf("no dma...?\n");
-//         }
+    auto once_per_second = make_timeout_time_ms(1000); // not strictly, but its ok.
+    while(true){
+        auto now = get_absolute_time();
+        dev::usb::tick();
+
+        // Sleeping is now illegal.
+        if(absolute_time_diff_us(now, once_per_second) <= 0){
+            set_obled(light_toggle);
+            light_toggle = !light_toggle;
+
+            if(dev::dac::isDMA){
+                printf("DMA now %d\n", dev::dac::isDMA);
+                dev::dac::isDMA = 0;
+            }else{
+                printf("no dma...?\n");
+            }
+            once_per_second = delayed_by_ms(now, 1000);
+        }
         // dev::servo::set_rotation_angle(-90);
     }
 }

@@ -1,6 +1,7 @@
 #include "../common.hpp"
 #include "usb_handlers.hpp"
 #include "../dev/i2s_protocol.hpp"
+#include "../dev/i2s_dac.hpp"
 
 #include <stdio.h>
 #include "pico/stdlib.h"
@@ -164,7 +165,6 @@ bool tud_audio_get_req_entity_cb(uint8_t rhport, tusb_control_request_t const* p
 
                         DEBUG("    Get channel %u volume range (%d, %d, %u) dB\r\n", channelNum,
                           ret.subrange[0].bMin / 256, ret.subrange[0].bMax / 256, ret.subrange[0].bRes / 256);
-
                         return tud_audio_buffer_and_schedule_control_xfer(rhport, p_request, (void*)&ret, sizeof(ret));
                     }
                     default: // Unknown/Unsupported control
@@ -209,22 +209,17 @@ bool tud_audio_get_req_entity_cb(uint8_t rhport, tusb_control_request_t const* p
     return false; // Yet not implemented
 }
 
-// TODO: Rid thyself
-#define SPEAKER_BUFF_SIZE 2048 // must be power of two
-#define SPEAKER_BUFF_AND  (SPEAKER_BUFF_SIZE - 1)
-int16_t spk_buf[SPEAKER_BUFF_SIZE];
-uint16_t spk_bufIn = 0;
-uint16_t spk_bufOut = 0;
-
 bool tud_audio_rx_done_pre_read_cb(uint8_t rhport, uint16_t n_bytes_received, uint8_t func_id, uint8_t ep_out, uint8_t cur_alt_setting) {
-    if(((n_bytes_received / 2) + spk_bufIn) > SPEAKER_BUFF_AND) {
-        u16 read = tud_audio_read(spk_buf + spk_bufIn, 2 * (SPEAKER_BUFF_SIZE - spk_bufIn));
-        n_bytes_received -= read;
-        spk_bufIn = 0;
-    }
-    u16 read = tud_audio_read(spk_buf + spk_bufIn, n_bytes_received);
-    spk_bufIn += read / 2;
-    spk_bufIn &= SPEAKER_BUFF_AND;
+    using namespace dev::dac;
+    // // Copy into the ring buffer
+    // u16 bytesRead = tud_audio_read(gAudioOutputBuffer.write_head(), gAudioOutputBuffer.dist_till_wrap() * 2);
+    // u16 remaining = n_bytes_received - remaining;
+    // if(remaining > 0){ // wrapping write
+    //     bytesRead = tud_audio_read(gAudioOutputBuffer.ring.begin(), remaining); // read the exact amount.
+    //     gAudioOutputBuffer.write = bytesRead / 2;
+    // }else{
+    //     gAudioOutputBuffer.write += bytesRead / 2;
+    // }
     return true;
 }
 

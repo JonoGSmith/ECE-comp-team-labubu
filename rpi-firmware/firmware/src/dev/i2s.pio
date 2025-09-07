@@ -2,21 +2,30 @@
 ; Outputs L/R Clock, the Bit Clock, and the Data Clock.
 ; Run at 2*BCK (since LRC and BCK change out of step with eachother)
 ; Configured for 32 bit depth output (x = bits - 2)
-; TODO: There's a good chance this program is WRONG!
+; NOTE: This program leverages autopull, threshold 32 bits.
+
+
+; LR  = 0, BCK = 0
+; BCK = 1
+; BCK = 0, Pull Out             |
+; BCK = 1,                      | 31x
+; LR  = 1, BCK = 0, Pull Out    Last bit of Left Channel
+; BCK = 1
+; BCK = 0, Pull Out ...
 
 .side_set 2
 public entry_point:
 ;                       LRCLK||BCK
-startLeft:
-    set x, 30         side 0b00 ; Start of left frame
-    pull noblock      side 0b01 ; BCK goes up one clock after the channel change
+    set x, 30         side 0b01 ; Start of left frame
 dataLeft: ; /- Write data bit
-    out pins, 1       side 0b00
+    out pins, 1       side 0b00 ; BCK goes up one clock after the channel change. Bits 0..=30
     jmp x-- dataLeft  side 0b01
 
-startRight:
-    set x, 30         side 0b10
-    pull noblock      side 0b11 ; BCK goes up one clock after the channel change
+    out pins, 1       side 0b10 ; Last bit of left
+
+    set x, 30         side 0b11
 dataRight:
     out pins, 1       side 0b10
     jmp x-- dataRight side 0b11
+
+    out pins, 1       side 0b00 ; Last bit of right
