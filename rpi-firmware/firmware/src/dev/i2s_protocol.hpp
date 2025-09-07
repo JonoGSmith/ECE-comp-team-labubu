@@ -7,6 +7,7 @@ extern "C" {
 }
 #include <hardware/dma.h>
 #include <hardware/pio.h>
+#include <hardware/clocks.h>
 
 // This file is derived in part from:
 // micropython/ports/rp2/machine_i2s.c
@@ -14,7 +15,6 @@ extern "C" {
 namespace dev::dac{
     // Sample as seen by the DAC
     union I2SAudioSample{
-        u64 raw;
         s32 c[2];
         struct{
             s32 l;
@@ -41,7 +41,8 @@ namespace dev::dac{
     constexpr u32 cI2S_LCK_RATE  = cI2SSampleRate; // 50% low (L), 50% hi (R)
     static_assert(cI2SBitDepth == 32, "Only 32 bit output is supported for the project.");
 
-    using I2SOutBufHalf = array<I2SAudioSample, (size_t)(cI2SSampleRate * 0.001)>; // This is 1ms each.
+    // TODO: THE DMA RATE IS 2X EXPECTED.
+    using I2SOutBufHalf = array<I2SAudioSample, (size_t)(cI2SSampleRate * 0.001)>; // This is 1ms each. Should dma 1000 times a second
     inline I2SOutBufHalf gI2SOutBufA;
     inline I2SOutBufHalf gI2SOutBufB;
 
@@ -92,7 +93,7 @@ namespace dev::dac{
             channel_config_set_read_increment(&cfg, true);   // reading from the buffer
             channel_config_set_write_increment(&cfg, false); // writing to the PIO block
             channel_config_set_dreq(&cfg, pio_get_dreq(pio, sm, true)); // this ensures the dma doesn't overflow the PIO
-            dma_channel_configure(ch, &cfg, &pio->txf[sm], buffer.begin(), dma_encode_transfer_count(sizeof(buffer) / sizeof(u32)), false); // gI2SOutBuf.a.begin(), gI2SOutBuf.length,
+            dma_channel_configure(ch, &cfg, &pio->txf[sm], buffer.begin(), sizeof(buffer) / 4, false);
         };
         configure(gDMADataA, gI2SOutBufA);
         configure(gDMADataB, gI2SOutBufB);
@@ -108,8 +109,8 @@ namespace dev::dac{
     inline void init(){
         auto const& pio = pio0; // chosen pio
         auto sm = init_pio(pio);
-        gI2SOutBufA.fill(I2SAudioSample{.l = 0, .r = 0}); // Quiet the buffers if they have static noise
-        gI2SOutBufA.fill(I2SAudioSample{.l = 0, .r = 0});
+        gI2SOutBufA.fill(I2SAudioSample{.l = 0, .r = 0}); // Clean the buffers so they don't spit out noise
+        gI2SOutBufB.fill(I2SAudioSample{.l = 0, .r = 0});
         init_dma(pio, sm); // set up dma to feed the state machine
         pio_sm_set_enabled(pio, sm, true); // Start the pio block. Empty I2S should be produced.
 

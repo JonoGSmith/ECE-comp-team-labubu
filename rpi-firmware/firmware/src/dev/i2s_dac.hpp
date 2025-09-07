@@ -11,7 +11,6 @@
 
 
 inline u32 sPlayHeadSamplePosition = 0;
-using MonoS16le = s16;
 
 namespace dev::dac{
     static inline volatile u16 isDMA = 0;
@@ -21,26 +20,31 @@ namespace dev::dac{
 
     // NOTE: This is explicitly temporary.
     inline void load_samples(I2SOutBufHalf& into){
-        auto audioData = (MonoS16le*)gTestAudioData;
-        const auto audioDataLength = gTestAudioSize / sizeof(MonoS16le);
+        // TODO: More efficient copy
+        auto audioData = (s8*)&gTestAudioData[0];
+        const auto audioDataLength = gTestAudioSize;
         for(auto& d: into){ // Copy and convert (s16 mono -> s32 stereo)
-            d = I2SAudioSample::make_quiet(audioData[sPlayHeadSamplePosition]);
+            d = I2SAudioSample{.l = (s32)audioData[sPlayHeadSamplePosition] << 19, .r = (s32)audioData[sPlayHeadSamplePosition] << 19};
             sPlayHeadSamplePosition += 1;
+            sPlayHeadSamplePosition %= audioDataLength;
         }
-        sPlayHeadSamplePosition %= audioDataLength;
+    }
+
+    inline void dma_handle_channel(DMAChannel ch, I2SOutBufHalf& buf){
+        bool needs_servicing = dma_channel_get_irq0_status(ch);
+        if(!needs_servicing){ return; }
+
+        load_samples(buf);
+
+        // Prime the DMA that just finished to run again
+        dma_channel_set_read_addr(ch, buf.begin(), false);
+        dma_channel_acknowledge_irq0(ch);
     }
 
     inline void dma_handler(){
         isDMA += 1; // TODO: debug counter
-        bool bufA_empty = dma_channel_get_irq0_status(gDMADataA);
-        auto& src_dma = bufA_empty ? gDMADataA : gDMADataB;
-        auto& src_ptr = bufA_empty ? gI2SOutBufA : gI2SOutBufB;
-
-        load_samples(src_ptr);
-
-        // Prime the DMA that just finished to run again
-        dma_channel_set_read_addr(src_dma, src_ptr.begin(), true);
-        dma_channel_acknowledge_irq0(src_dma);
+        dma_handle_channel(gDMADataA, gI2SOutBufA);
+        dma_handle_channel(gDMADataB, gI2SOutBufB);
     }
 
 }

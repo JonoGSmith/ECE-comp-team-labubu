@@ -3,6 +3,7 @@
 #include "pico/cyw43_arch.h"
 #include "pico/multicore.h"
 #include "pico/time.h"
+#include "hardware/clocks.h"
 #include "bsp/board_api.h"
 #include "tusb.h"
 
@@ -16,6 +17,8 @@ void set_obled(bool on){
 }
 
 void init(){
+    set_sys_clock_khz(sys::cClockRate / 1000, true);
+
     dev::usb::init();
     while(to_ms_since_boot(get_absolute_time()) < 3000){ // Wait to connect device to PC - debugging.
         dev::usb::tick();
@@ -35,7 +38,8 @@ int main(){
     bool light_toggle = true;
     init();
 
-    printf("Hello, world! Playing %d samples.\n", gTestAudioSize / sizeof(u16));
+    // printf("Hello, world! Playing %d samples.\n", gTestAudioSize / sizeof(u16));
+    printf("WARNING! Crashes destroy eardrums! (Known bugs with usb audio)");
     dev::dac::start();
 
     auto once_per_second = make_timeout_time_ms(1000); // not strictly, but its ok.

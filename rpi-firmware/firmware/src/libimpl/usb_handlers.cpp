@@ -107,7 +107,6 @@ bool tud_audio_set_req_entity_cb(uint8_t rhport, tusb_control_request_t const* p
                 return true;
             }
             default: // Unknown/Unsupported control
-                TU_BREAKPOINT();
                 return false;
         }
     }
@@ -127,7 +126,7 @@ bool tud_audio_get_req_entity_cb(uint8_t rhport, tusb_control_request_t const* p
         switch(ctrlSel) {
             case AUDIO_TE_CTRL_CONNECTOR: {
                 // The terminal connector control only has a get request with only the CUR attribute.
-                audio_desc_channel_cluster_t ret;
+                static audio_desc_channel_cluster_t ret;
                 // Those are dummy values for now
                 ret.bNrChannels = 1;
                 ret.bmChannelConfig = (audio_channel_config_t)0;
@@ -137,7 +136,6 @@ bool tud_audio_get_req_entity_cb(uint8_t rhport, tusb_control_request_t const* p
                 return tud_audio_buffer_and_schedule_control_xfer(rhport, p_request, (void*)&ret, sizeof(ret));
             } break;
             default: // Unknown/Unsupported control selector
-                TU_BREAKPOINT();
                 return false;
         }
     }
@@ -156,7 +154,7 @@ bool tud_audio_get_req_entity_cb(uint8_t rhport, tusb_control_request_t const* p
                         DEBUG("    Get Volume of channel: %u\r\n", channelNum);
                         return tud_control_xfer(rhport, p_request, &volumeCtrls[channelNum], sizeof(volumeCtrls[0]));
                     case AUDIO_CS_REQ_RANGE: { // Copy values - only for testing - better is version below
-                        audio_control_range_2_n_t(1) ret;
+                        static audio_control_range_2_n_t(1) ret;
 
                         ret.wNumSubRanges = tu_htole16(1),
                         ret.subrange[0].bMin = tu_htole16(-VOLUME_CTRL_50_DB);
@@ -168,11 +166,9 @@ bool tud_audio_get_req_entity_cb(uint8_t rhport, tusb_control_request_t const* p
                         return tud_audio_buffer_and_schedule_control_xfer(rhport, p_request, (void*)&ret, sizeof(ret));
                     }
                     default: // Unknown/Unsupported control
-                        TU_BREAKPOINT();
                         return false;
                 } break;
             default: // Unknown/Unsupported control
-                TU_BREAKPOINT();
                 return false;
         }
     }
@@ -190,7 +186,6 @@ bool tud_audio_get_req_entity_cb(uint8_t rhport, tusb_control_request_t const* p
                         DEBUG("    Get Sample Freq. range\r\n");
                         return tud_control_xfer(rhport, p_request, &sampleFreqRng, sizeof(sampleFreqRng));
                     default: // Unknown/Unsupported control
-                        TU_BREAKPOINT();
                         return false;
                 }
                 break;
@@ -200,7 +195,6 @@ bool tud_audio_get_req_entity_cb(uint8_t rhport, tusb_control_request_t const* p
                 return tud_control_xfer(rhport, p_request, &clkValid, sizeof(clkValid));
             // Unknown/Unsupported control
             default:
-                TU_BREAKPOINT();
                 return false;
         }
     }

@@ -1,3 +1,3 @@
 #include "binaries.hpp"
 
-INCBIN(gTestAudio, "res/mono48k-s16le-test-audio.raw");
+INCBIN(gTestAudio, "res/Genshis8.raw");
