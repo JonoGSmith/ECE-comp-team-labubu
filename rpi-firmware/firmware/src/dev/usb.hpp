@@ -5,7 +5,7 @@
 
 namespace dev::usb{
     inline void init(){
-        // board_init();
+        board_init();
         tusb_init();
         stdio_init_all();
     }

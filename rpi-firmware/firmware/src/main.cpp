@@ -36,17 +36,17 @@ int main(){
     dev::dac::start();
     while(true){
         dev::usb::tick();
-        set_obled(light_toggle);
-        light_toggle = !light_toggle;
+        // Sleeping is now illegal.
 
-        if(dev::dac::isDMA){
-            printf("DMA now %d\n", dev::dac::isDMA);
-            dev::dac::isDMA = 0;
-        }else{
-            printf("no dma...?\n");
-        }
-        //
-        sleep_ms(1000);
+//         set_obled(light_toggle);
+//         light_toggle = !light_toggle;
+//
+//         if(dev::dac::isDMA){
+//             printf("DMA now %d\n", dev::dac::isDMA);
+//             dev::dac::isDMA = 0;
+//         }else{
+//             printf("no dma...?\n");
+//         }
         // dev::servo::set_rotation_angle(-90);
     }
 }

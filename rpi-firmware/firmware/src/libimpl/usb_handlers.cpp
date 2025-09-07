@@ -13,9 +13,20 @@
 #define DEBUG printf
 
 // --------------------------------------
+// General USB behaviours
+// --------------------------------------
+
+void tud_mount_cb(){}
+void tud_umount_cb(){}
+void tud_suspend_cb(bool remote_wakeup_en){}
+void tud_resume_cb(){}
+
+// --------------------------------------
 // The serial protocol backend
 // --------------------------------------
-void tud_cdc_rx_cb(uint8_t itf) {
+
+void tud_cdc_rx_cb(uint8_t itf){
+    // Only one CDC interface exists on the device, so `itf` is ignored.
     static array<u8, 64> buf;
     if(tud_cdc_connected() && tud_cdc_available() > 0) {
         u32 count = tud_cdc_read(buf.begin(), sizeof(buf));
@@ -23,7 +34,8 @@ void tud_cdc_rx_cb(uint8_t itf) {
         for(size_t i = 0; i < count; i++) {
             if(buf[i] == '\n') {
                 // PROCESS THE LINE HERE
-                tud_cdc_write("Helo! I am unda da wata!", 5);
+                sv msg = "Helo! I am unda da wata!";
+                tud_cdc_write(msg.begin(), msg.size());
                 tud_cdc_write_flush();
             }
         }
@@ -31,29 +43,36 @@ void tud_cdc_rx_cb(uint8_t itf) {
 }
 
 // --------------------------------------
-// The audio protocol backends
+// The audio protocol backend
 // --------------------------------------
 
 static array<bool, 2> muteCtrls = {}; // 0: Master, 1: First channel (mono)
 static array<s16, 2> volumeCtrls = {};
 
-uint32_t sampFreq;
-uint8_t clkValid;
+static uint32_t sampFreq = CFG_TUD_AUDIO_FUNC_1_SAMPLE_RATE; // const?
+static uint8_t clkValid = 1;
 
-audio_control_range_2_n_t(1) volumeRng[2]; // Volume range state
-audio_control_range_4_n_t(1) sampleFreqRng; // Sample frequency range state
+static audio_control_range_2_n_t(1) volumeRng[2]; // Volume range state
+static audio_control_range_4_n_t(1) sampleFreqRng = {
+    .wNumSubRanges = 1,
+    .subrange = {{
+        .bMin = CFG_TUD_AUDIO_FUNC_1_SAMPLE_RATE,
+        .bMax = CFG_TUD_AUDIO_FUNC_1_SAMPLE_RATE,
+        .bRes = 0,
+    }}
+}; // Sample frequency range state
 
-enum {
-    VOLUME_CTRL_0_DB = 0,
-    VOLUME_CTRL_10_DB = 2560,
-    VOLUME_CTRL_20_DB = 5120,
-    VOLUME_CTRL_30_DB = 7680,
-    VOLUME_CTRL_40_DB = 10240,
-    VOLUME_CTRL_50_DB = 12800,
-    VOLUME_CTRL_60_DB = 15360,
-    VOLUME_CTRL_70_DB = 17920,
-    VOLUME_CTRL_80_DB = 20480,
-    VOLUME_CTRL_90_DB = 23040,
+enum VOLUM_CTRL {
+    VOLUME_CTRL_0_DB   =     0,
+    VOLUME_CTRL_10_DB  =  2560,
+    VOLUME_CTRL_20_DB  =  5120,
+    VOLUME_CTRL_30_DB  =  7680,
+    VOLUME_CTRL_40_DB  = 10240,
+    VOLUME_CTRL_50_DB  = 12800,
+    VOLUME_CTRL_60_DB  = 15360,
+    VOLUME_CTRL_70_DB  = 17920,
+    VOLUME_CTRL_80_DB  = 20480,
+    VOLUME_CTRL_90_DB  = 23040,
     VOLUME_CTRL_100_DB = 25600,
     VOLUME_CTRL_SILENCE = 0x8000,
 };
@@ -135,7 +154,7 @@ bool tud_audio_get_req_entity_cb(uint8_t rhport, tusb_control_request_t const* p
                     case AUDIO_CS_REQ_CUR:
                         DEBUG("    Get Volume of channel: %u\r\n", channelNum);
                         return tud_control_xfer(rhport, p_request, &volumeCtrls[channelNum], sizeof(volumeCtrls[0]));
-                    case AUDIO_CS_REQ_RANGE: // Copy values - only for testing - better is version below
+                    case AUDIO_CS_REQ_RANGE: { // Copy values - only for testing - better is version below
                         audio_control_range_2_n_t(1) ret;
 
                         ret.wNumSubRanges = tu_htole16(1),
@@ -147,6 +166,7 @@ bool tud_audio_get_req_entity_cb(uint8_t rhport, tusb_control_request_t const* p
                           ret.subrange[0].bMin / 256, ret.subrange[0].bMax / 256, ret.subrange[0].bRes / 256);
 
                         return tud_audio_buffer_and_schedule_control_xfer(rhport, p_request, (void*)&ret, sizeof(ret));
+                    }
                     default: // Unknown/Unsupported control
                         TU_BREAKPOINT();
                         return false;
@@ -166,23 +186,18 @@ bool tud_audio_get_req_entity_cb(uint8_t rhport, tusb_control_request_t const* p
                     case AUDIO_CS_REQ_CUR:
                         DEBUG("    Get Sample Freq.\r\n");
                         return tud_control_xfer(rhport, p_request, &sampFreq, sizeof(sampFreq));
-
                     case AUDIO_CS_REQ_RANGE:
                         DEBUG("    Get Sample Freq. range\r\n");
                         return tud_control_xfer(rhport, p_request, &sampleFreqRng, sizeof(sampleFreqRng));
-
-                        // Unknown/Unsupported control
-                    default:
+                    default: // Unknown/Unsupported control
                         TU_BREAKPOINT();
                         return false;
                 }
                 break;
-
             case AUDIO_CS_CTRL_CLK_VALID:
                 // Only cur attribute exists for this request
                 DEBUG("    Get Sample Freq. valid\r\n");
                 return tud_control_xfer(rhport, p_request, &clkValid, sizeof(clkValid));
-
             // Unknown/Unsupported control
             default:
                 TU_BREAKPOINT();
@@ -194,16 +209,22 @@ bool tud_audio_get_req_entity_cb(uint8_t rhport, tusb_control_request_t const* p
     return false; // Yet not implemented
 }
 
+// TODO: Rid thyself
+#define SPEAKER_BUFF_SIZE 2048 // must be power of two
+#define SPEAKER_BUFF_AND  (SPEAKER_BUFF_SIZE - 1)
+int16_t spk_buf[SPEAKER_BUFF_SIZE];
+uint16_t spk_bufIn = 0;
+uint16_t spk_bufOut = 0;
 
 bool tud_audio_rx_done_pre_read_cb(uint8_t rhport, uint16_t n_bytes_received, uint8_t func_id, uint8_t ep_out, uint8_t cur_alt_setting) {
-    // if(((n_bytes_received / 2) + spk_bufIn) > SPEAKER_BUFF_AND) {
-    //     u16 read = tud_audio_read(spk_buf + spk_bufIn, 2 * (SPEAKER_BUFF_SIZE - spk_bufIn));
-    //     n_bytes_received -= read;
-    //     spk_bufIn = 0;
-    // }
-    // u16 read = tud_audio_read(spk_buf + spk_bufIn, n_bytes_received);
-    // spk_bufIn += read / 2;
-    // spk_bufIn &= SPEAKER_BUFF_AND;
+    if(((n_bytes_received / 2) + spk_bufIn) > SPEAKER_BUFF_AND) {
+        u16 read = tud_audio_read(spk_buf + spk_bufIn, 2 * (SPEAKER_BUFF_SIZE - spk_bufIn));
+        n_bytes_received -= read;
+        spk_bufIn = 0;
+    }
+    u16 read = tud_audio_read(spk_buf + spk_bufIn, n_bytes_received);
+    spk_bufIn += read / 2;
+    spk_bufIn &= SPEAKER_BUFF_AND;
     return true;
 }
 
@@ -214,5 +235,5 @@ bool tud_audio_set_itf_close_EP_cb(uint8_t rhport, tusb_control_request_t const*
 void tud_audio_feedback_params_cb(uint8_t func_id, uint8_t alt_itf, audio_feedback_params_t* feedback_param) {
     // Set feedback method to fifo counting
     feedback_param->method = AUDIO_FEEDBACK_METHOD_FIFO_COUNT;
-    feedback_param->sample_freq = dev::dac::cI2SSampleRate;
+    feedback_param->sample_freq = CFG_TUD_AUDIO_FUNC_1_SAMPLE_RATE;
 }

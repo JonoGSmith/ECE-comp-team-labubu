@@ -96,6 +96,7 @@
 // AUDIO DRIVER CONFIGURATION
 //--------------------------------------------------------------------
 #define CFG_TUD_AUDIO_FUNC_1_SAMPLE_RATE                              48000
+#define CFG_TUD_AUDIO_FUNC_1_MAX_SAMPLE_RATE                          CFG_TUD_AUDIO_FUNC_1_SAMPLE_RATE
 
 #define CFG_TUD_AUDIO_FUNC_1_DESC_LEN                                 TUD_AUDIO_SPEAKER_MONO_FB_DESC_LEN
 #define CFG_TUD_AUDIO_FUNC_1_N_AS_INT                                 1                                       // Number of Standard AS Interface Descriptors (4.9.1) defined per audio function - this is required to be able to remember the current alternate settings of these interfaces - We restrict us here to have a constant number for all audio functions (which means this has to be the maximum number of AS interfaces an audio function has and a second audio function with less AS interfaces just wastes a few bytes)
@@ -105,8 +106,6 @@
 #define CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_RX                    2
 #define CFG_TUD_AUDIO_FUNC_1_RESOLUTION_RX                            16
 #define CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX                            1
-
-#define CFG_TUD_AUDIO_FUNC_1_MAX_SAMPLE_RATE                          48000
 
 #define CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX        TUD_AUDIO_EP_SIZE(CFG_TUD_AUDIO_FUNC_1_MAX_SAMPLE_RATE, CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_RX, CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX)
 #define CFG_TUD_AUDIO_FUNC_1_EP_OUT_SW_BUF_SZ     (TUD_OPT_HIGH_SPEED ? 32 : 4) * CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX // Example read FIFO every 1ms, so it should be 8 times larger for HS device
