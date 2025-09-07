@@ -2,11 +2,12 @@
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
 #include "pico/multicore.h"
+#include "bsp/board_api.h"
 #include "tusb.h"
 
 #include "dev/mic_adc.hpp"
 #include "dev/servo.hpp"
-#include "dev/usbuart.hpp"
+#include "dev/usb.hpp"
 #include "dev/i2s_dac.hpp"
 
 void set_obled(bool on){
@@ -27,13 +28,14 @@ void init(){
     set_obled(true); // Turn on the Pico W LED as proof of life.
 }
 
-int main2(){
+int main(){
     bool light_toggle = true;
     init();
 
     printf("Hello, world! Playing %d samples.\n", gTestAudioSize / sizeof(u16));
     dev::dac::start();
     while(true){
+        dev::usb::tick();
         set_obled(light_toggle);
         light_toggle = !light_toggle;
 

@@ -26,7 +26,7 @@ def make_tone(rate, bits, frequency):
     sample_size_in_bytes = bits // 8
     samples = bytearray(samples_per_cycle * sample_size_in_bytes)
     volume_reduction_factor = 32
-    range = pow(2, bits) // 2 // volume_reduction_factor
+    range = pow(2, bits - 1) // volume_reduction_factor
 
     if bits == 16:
         format = "<h"
@@ -39,59 +39,13 @@ def make_tone(rate, bits, frequency):
 
     return samples
 
-if os.uname().machine.count("PYBv1"):
-
-    # ======= I2S CONFIGURATION =======
-    SCK_PIN = "Y6"
-    WS_PIN = "Y5"
-    SD_PIN = "Y8"
-    I2S_ID = 2
-    BUFFER_LENGTH_IN_BYTES = 2000
-    # ======= I2S CONFIGURATION =======
-
-elif os.uname().machine.count("PYBD"):
-    import pyb
-
-    pyb.Pin("EN_3V3").on()  # provide 3.3V on 3V3 output pin
-
-    # ======= I2S CONFIGURATION =======
-    SCK_PIN = "Y6"
-    WS_PIN = "Y5"
-    SD_PIN = "Y8"
-    I2S_ID = 2
-    BUFFER_LENGTH_IN_BYTES = 2000
-    # ======= I2S CONFIGURATION =======
-
-elif os.uname().machine.count("ESP32"):
-
-    # ======= I2S CONFIGURATION =======
-    SCK_PIN = 32
-    WS_PIN = 25
-    SD_PIN = 33
-    I2S_ID = 0
-    BUFFER_LENGTH_IN_BYTES = 2000
-    # ======= I2S CONFIGURATION =======
-
-elif os.uname().machine.count("Raspberry"):
-
+if os.uname().machine.count("Raspberry"):
     # ======= I2S CONFIGURATION =======
     SCK_PIN = 16
     WS_PIN = 17
     SD_PIN = 18
     I2S_ID = 0
     BUFFER_LENGTH_IN_BYTES = 2000
-    # ======= I2S CONFIGURATION =======
-
-elif os.uname().machine.count("MIMXRT"):
-
-    # ======= I2S CONFIGURATION =======
-    SCK_PIN = 4
-    WS_PIN = 3
-    SD_PIN = 2
-    I2S_ID = 2
-    BUFFER_LENGTH_IN_BYTES = 2000
-    # ======= I2S CONFIGURATION =======
-
 else:
     print("Warning: program not tested with this board")
 

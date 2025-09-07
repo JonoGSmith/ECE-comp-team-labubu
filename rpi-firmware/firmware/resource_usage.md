@@ -6,7 +6,7 @@
 
 - DMA: 12 available
   - 1 channel (`mic_adc` adc -> buffer)
-  - 2 channels (`i2s_dac` buffer -> pio, 2nd one TODO)
+  - 2 channels (`i2s_dac` bufferA -> PIO, bufferB -> PIO)
 
 - DMA Interrupts: 2 available
   - 0: (`i2s_dac`: on buffer empty)

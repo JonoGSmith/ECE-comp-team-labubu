@@ -1,18 +1,13 @@
-#ifndef USB_DESCRIPTORS_H_
-#define USB_DESCRIPTORS_H_
+#include "tusb.h"
 
-// #include "tusb.h"
+extern "C" {
+#include "pico/unique_id.h"
+#include "pico/stdio_usb/reset_interface.h"
+#include "pico/usb_reset_interface.h"
+}
 
-//--------------------------------------------------------------------
-// AUDIO
-//--------------------------------------------------------------------
-
-// Defined in TUD_AUDIO_SPEAKER_STEREO_FB_DESCRIPTOR
-#define UAC2_ENTITY_CLOCK               0x04
-#define UAC2_ENTITY_INPUT_TERMINAL      0x01
-#define UAC2_ENTITY_FEATURE_UNIT        0x02
-#define UAC2_ENTITY_OUTPUT_TERMINAL     0x03
-
+#include "../common.hpp"
+#include "../endian.hpp"
 
 // #define TUD_AUDIO_SPEAKER_MONO_FB_DESC_LEN (TUD_AUDIO_DESC_IAD_LEN\
 //   + TUD_AUDIO_DESC_STD_AC_LEN\
@@ -126,56 +121,137 @@
 //     /*_epsize*/ _epfbsize, \
 //     /*_interval*/ TUD_OPT_HIGH_SPEED ? 4 : 1)
 
+
+enum StringDescriptors{
+    SD_LANGUAGE = 0,
+    SD_MANUFACTURER,
+    SD_PRODUCT,
+    SD_SERIALNUMBER,
+    SD_CDC,
+    SD_RPI_RESET,
+    SD_UAC_COMPOSITE,
+};
+
 //--------------------------------------------------------------------
 // ENDPOINTS
 //--------------------------------------------------------------------
 
-#define USBD_CDC_EP_CMD (0x81)
-#define USBD_CDC_EP_OUT (0x02)
-#define USBD_CDC_EP_IN (0x82)
-#define USBD_CDC_CMD_MAX_SIZE (8)
-#define USBD_CDC_IN_OUT_MAX_SIZE (64)
+enum EndpointsOut{
+    EPO_AUD = 0x01,
+    EPO_CDC = 0x02,
+};
+enum EndpointsIn{
+    EPI_AUD_FB = 0x81,
+    EPI_CDC_CMD = 0x81,
+    EPI_CDC = 0x82,
 
-#define USBD_STR_RPI_RESET (0x05)
+};
 
-#define EPNUM_AUDIO_FB    0x81
-#define EPNUM_AUDIO_OUT   0x01
-
-//--------------------------------------------------------------------
-// INTERFACES
-//--------------------------------------------------------------------
-
-#define USBD_ITF_CDC       0
-// the above ITF will create another one
-#define USBD_ITF_RPI_RESET 2
-#define ITF_NUM_AUDIO_CONTROL 3
-// the above ITF will create another one
+enum InterfaceIDs{
+    ITF_CDC = 0,
+    ITF_CDC2, // Implicit (keep directly after CDC)
+    ITF_RPI_RESET,
+    ITF_AUDIO_CONTROL,
+    ITF_AUDIO2, // Implicit (keep directly after AUDIO_CONTROL)
+    ITF_COUNTOF
+};
 
 //--------------------------------------------------------------------
 // PICO RESET
 //--------------------------------------------------------------------
 
-#define TUD_RPI_RESET_DESC_LEN  9
-
 #define TUD_RPI_RESET_DESCRIPTOR(_itfnum, _stridx) \
-  /* Interface */\
-  9, TUSB_DESC_INTERFACE, _itfnum, 0, 0, TUSB_CLASS_VENDOR_SPECIFIC, RESET_INTERFACE_SUBCLASS, RESET_INTERFACE_PROTOCOL, _stridx,
+    9, TUSB_DESC_INTERFACE, _itfnum, 0, 0, TUSB_CLASS_VENDOR_SPECIFIC, RESET_INTERFACE_SUBCLASS, RESET_INTERFACE_PROTOCOL, _stridx,
 
 //--------------------------------------------------------------------
 // GENERAL
 //--------------------------------------------------------------------
 
-#define USBD_VID (0x2E8A) // Raspberry Pi
-#define USBD_PID (0x0009) // Raspberry Pi Pico SDK CDC
+static constexpr tusb_desc_device_t usbd_desc_device = {
+    .bLength = sizeof(tusb_desc_device_t),
+    .bDescriptorType = TUSB_DESC_DEVICE,
+    .bcdUSB = 0x0110,
+    .bDeviceClass = TUSB_CLASS_MISC,
+    .bDeviceSubClass = MISC_SUBCLASS_COMMON,
+    .bDeviceProtocol = MISC_PROTOCOL_IAD,
+    .bMaxPacketSize0 = CFG_TUD_ENDPOINT0_SIZE,
+    .idVendor  = 0x2E8A, // Raspberry Pi
+    .idProduct = 0x0009, // Raspberry Pi Pico SDK CDC
+    .bcdDevice = 0x0100, // Device version (Binary Coded Decimal)
+    .iManufacturer = SD_MANUFACTURER,
+    .iProduct      = SD_PRODUCT,
+    .iSerialNumber = SD_SERIALNUMBER,
+    .bNumConfigurations = 1,
+};
 
-#define USBD_MANUFACTURER "Raspberry Pi"
-#define USBD_PRODUCT "Pico"
+static constexpr auto usbd_desc_cfg = []()consteval{
+    constexpr u16 USBD_MAX_POWER_MA = 250;
+    auto temp = std::to_array<u8>({
+        TUD_CONFIG_DESCRIPTOR(1, ITF_COUNTOF, 0, /*len*/0, /*attribs*/0, USBD_MAX_POWER_MA),
 
-#define USBD_DESC_LEN (TUD_CONFIG_DESC_LEN + TUD_CDC_DESC_LEN + TUD_RPI_RESET_DESC_LEN + TUD_AUDIO_SPEAKER_MONO_FB_DESC_LEN)
-#define USBD_MAX_POWER_MA (250)
+        TUD_CDC_DESCRIPTOR(ITF_CDC, SD_CDC, EPI_CDC_CMD, 8, EPO_CDC, EPI_CDC, 64),
 
-#define USBD_ITF_MAX (5)
-#define USBD_CONFIGURATION_DESCRIPTOR_ATTRIBUTE (0)
+        TUD_RPI_RESET_DESCRIPTOR(ITF_RPI_RESET, SD_RPI_RESET)
 
+        TUD_AUDIO_SPEAKER_MONO_FB_DESCRIPTOR(ITF_AUDIO_CONTROL,
+            SD_UAC_COMPOSITE,
+            CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_RX,
+            CFG_TUD_AUDIO_FUNC_1_RESOLUTION_RX,
+            EPO_AUD,
+            CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX,
+            EPI_AUD_FB, 4)
+    });
+    temp[2] = sizeof(temp); // Patch in the correct length
+    temp[3] = sizeof(temp) >> 8;
+    return temp;
+}();
 
-#endif
+template <size_t N> struct PACKED desc_string {
+    u8 length;
+    u8 constant_descriptor_type;
+    array<u16le, N> str;
+};
+template <size_t N> consteval auto desc_string_make(array<u16, N> langs){
+    auto d = desc_string<N>{};
+    d.length = sizeof(d);
+    d.constant_descriptor_type = TUSB_DESC_STRING;
+    d.str = langs;
+    return d;
+}
+template <size_t N> consteval auto desc_string_make(array<char16_t, N> langs){
+    array<u16, N> x = {};
+    for(size_t i = 0; i < langs.size(); i++){ x[i] = langs[i]; }
+    return desc_string_make(x);
+}
+
+// ----------------------------------------------
+// Callback Definitions
+// -----------------------------------------------
+
+extern "C" u8 const* tud_descriptor_device_cb() {
+    return (u8 const*)&usbd_desc_device;
+}
+
+extern "C" u8 const* tud_descriptor_configuration_cb(u8 index) {
+    return usbd_desc_cfg.begin();
+}
+
+extern "C" u16 const* tud_descriptor_string_cb(u8 index, u16 langid) {
+    #define X(idx, msg) case idx: { \
+        static constexpr auto x = desc_string_make(u ## msg ## _arr); \
+        return (u16 const*)&x; \
+    }
+    switch(index) {
+        case SD_LANGUAGE: { // English code
+            static constexpr auto x = desc_string_make(array<u16, 1>{0x0409});
+            return (u16 const*)&x;
+        }
+        X(SD_MANUFACTURER, "UniStudents™");
+        X(SD_PRODUCT, "SmartDoll");
+        X(SD_SERIALNUMBER, "serialIDK");
+        X(SD_CDC, "Board CDC");
+        X(SD_RPI_RESET, "Pi-Reset");
+        X(SD_UAC_COMPOSITE, "Board Audio");
+    }
+    return nullptr;
+}

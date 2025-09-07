@@ -2,20 +2,21 @@
 ; Outputs L/R Clock, the Bit Clock, and the Data Clock.
 ; Run at 2*BCK (since LRC and BCK change out of step with eachother)
 ; Configured for 32 bit depth output (x = bits - 2)
+; TODO: There's a good chance this program is WRONG!
 
 .side_set 2
 public entry_point:
 ;                       LRCLK||BCK
-frameL:
+startLeft:
     set x, 30         side 0b00 ; Start of left frame
-    pull noblock      side 0b01 ; One clock after edge change with no data
-dataL: ; /- Write data bit
+    pull noblock      side 0b01 ; BCK goes up one clock after the channel change
+dataLeft: ; /- Write data bit
     out pins, 1       side 0b00
-    jmp x-- dataL     side 0b01
+    jmp x-- dataLeft  side 0b01
 
-frameR:
+startRight:
     set x, 30         side 0b10
-    pull noblock      side 0b11 ; One clock after edge change with no data
-dataR:
+    pull noblock      side 0b11 ; BCK goes up one clock after the channel change
+dataRight:
     out pins, 1       side 0b10
-    jmp x-- dataR     side 0b11
+    jmp x-- dataRight side 0b11

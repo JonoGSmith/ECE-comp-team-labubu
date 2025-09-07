@@ -40,7 +40,7 @@ pico_enable_stdio_uart(firmware 0)
 
 pico_generate_pio_header(firmware "${CMAKE_CURRENT_LIST_DIR}/src/dev/i2s.pio")
 
-target_include_directories(firmware PRIVATE "src/libcfg/"
+target_include_directories(firmware PRIVATE "src/libimpl/"
     "libs/incbin/" "libs/magic_enum/include"
     "res/incbin/"
 )

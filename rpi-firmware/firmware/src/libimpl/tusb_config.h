@@ -1,36 +1,22 @@
-/*
- * The MIT License (MIT)
- *
- * Copyright (c) 2019 Ha Thach (tinyusb.org)
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- *
- */
+#pragma once
+// NOTE:
+// The device essentially is acting as a USB composite (a splitter) built out of
+// 1. A serial console for controlling the servo and communicating debug information
+// 2. A UAC2 compliant speaker (outputs input to the I2S DAC)
+// 3. A UAC2 compliant microphone (captures input from the ADC)
+// 4. The Raspberry PI reset protocol for convenient development cycles (broken? May be removed soon.)
 
-#ifndef _TUSB_CONFIG_H_
-#define _TUSB_CONFIG_H_
+// NOTE:
+// An effort has been made to remove all preprocessor definitions that aren't needed by third party libraries
+// And replace them with constants inside `usb_descriptors`
+
+// THANKS
+// https://blogs.electro707.com/electronics/2025/02/09/Pico_USB_Audio.html
+
 
 #ifdef __cplusplus
- extern "C" {
+    extern "C" {
 #endif
-
-#include "usb_descriptors.h"
 
 //--------------------------------------------------------------------+
 // Board Specific Configuration
@@ -38,12 +24,11 @@
 
 // RHPort number used for device can be defined by board.mk, default to port 0
 #ifndef BOARD_TUD_RHPORT
-#define BOARD_TUD_RHPORT      0
+    #define BOARD_TUD_RHPORT      0
 #endif
-
 // RHPort max operational speed can defined by board.mk
 #ifndef BOARD_TUD_MAX_SPEED
-#define BOARD_TUD_MAX_SPEED   OPT_MODE_DEFAULT_SPEED
+    #define BOARD_TUD_MAX_SPEED   OPT_MODE_DEFAULT_SPEED
 #endif
 
 //--------------------------------------------------------------------
@@ -52,18 +37,18 @@
 
 // defined by compiler flags for flexibility
 #ifndef CFG_TUSB_MCU
-#error CFG_TUSB_MCU must be defined
+    #error CFG_TUSB_MCU must be defined
 #endif
 
 #ifndef CFG_TUSB_OS
-#define CFG_TUSB_OS           OPT_OS_NONE
+    #define CFG_TUSB_OS           OPT_OS_NONE
 #endif
 
 #ifndef CFG_TUSB_DEBUG
-#define CFG_TUSB_DEBUG        0
+    #define CFG_TUSB_DEBUG        0
 #endif
 
-// Enable Device stack
+// USB Device not Host
 #define CFG_TUD_ENABLED       1
 
 // Default is max speed that hardware controller could support with on-chip PHY
@@ -79,11 +64,11 @@
  * - CFG_TUSB_MEM_ALIGN   : __attribute__ ((aligned(4)))
  */
 #ifndef CFG_TUSB_MEM_SECTION
-#define CFG_TUSB_MEM_SECTION
+    #define CFG_TUSB_MEM_SECTION
 #endif
 
 #ifndef CFG_TUSB_MEM_ALIGN
-#define CFG_TUSB_MEM_ALIGN          __attribute__ ((aligned(4)))
+    #define CFG_TUSB_MEM_ALIGN __attribute__ ((aligned(4)))
 #endif
 
 //--------------------------------------------------------------------
@@ -91,13 +76,21 @@
 //--------------------------------------------------------------------
 
 #ifndef CFG_TUD_ENDPOINT0_SIZE
-#define CFG_TUD_ENDPOINT0_SIZE    64
+    #define CFG_TUD_ENDPOINT0_SIZE    64
 #endif
 
-//------------- CLASS -------------//
+// Supported USB Classes //
 #define CFG_TUD_CDC               1
 #define CFG_TUD_AUDIO             1
+#define CFG_TUD_VENDOR            1
 
+//--------------------------------------------------------------------
+// CDC CLASS DRIVER CONFIGURATION
+//--------------------------------------------------------------------
+
+// CDC FIFO size of TX and RX
+#define CFG_TUD_CDC_RX_BUFSIZE                    64
+#define CFG_TUD_CDC_TX_BUFSIZE                    64
 
 //--------------------------------------------------------------------
 // AUDIO DRIVER CONFIGURATION
@@ -110,26 +103,17 @@
 
 #define CFG_TUD_AUDIO_ENABLE_EP_OUT                                   1
 #define CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_RX                    2
-#define CFG_TUD_AUDIO_FUNC_1_RESOLUTION_RX                           16
+#define CFG_TUD_AUDIO_FUNC_1_RESOLUTION_RX                            16
 #define CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX                            1
 
-#define CFG_TUD_AUDIO_FUNC_1_MAX_SAMPLE_RATE                         48000
+#define CFG_TUD_AUDIO_FUNC_1_MAX_SAMPLE_RATE                          48000
 
 #define CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX        TUD_AUDIO_EP_SIZE(CFG_TUD_AUDIO_FUNC_1_MAX_SAMPLE_RATE, CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_RX, CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX)
 #define CFG_TUD_AUDIO_FUNC_1_EP_OUT_SW_BUF_SZ     (TUD_OPT_HIGH_SPEED ? 32 : 4) * CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX // Example read FIFO every 1ms, so it should be 8 times larger for HS device
 
 #define CFG_TUD_AUDIO_ENABLE_FEEDBACK_EP                             1
 
-//--------------------------------------------------------------------
-// CDC CLASS DRIVER CONFIGURATION
-//--------------------------------------------------------------------
-
-// CDC FIFO size of TX and RX
-#define CFG_TUD_CDC_RX_BUFSIZE                    64
-#define CFG_TUD_CDC_TX_BUFSIZE                    64
-
 #ifdef __cplusplus
- }
+    }
 #endif
 
-#endif /* _TUSB_CONFIG_H_ */
