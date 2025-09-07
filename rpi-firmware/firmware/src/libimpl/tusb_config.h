@@ -8,7 +8,7 @@
 
 // NOTE:
 // An effort has been made to remove all preprocessor definitions that aren't needed by third party libraries
-// And replace them with constants inside `usb_descriptors`
+// And replace them with constants inside `usb_descriptors`, or otherwise as defines without "TUD" in the name
 
 // THANKS
 // https://blogs.electro707.com/electronics/2025/02/09/Pico_USB_Audio.html
@@ -95,22 +95,25 @@
 //--------------------------------------------------------------------
 // AUDIO DRIVER CONFIGURATION
 //--------------------------------------------------------------------
-#define CFG_TUD_AUDIO_FUNC_1_SAMPLE_RATE                              48000
-#define CFG_TUD_AUDIO_FUNC_1_MAX_SAMPLE_RATE                          CFG_TUD_AUDIO_FUNC_1_SAMPLE_RATE
+#define AUD_SPK_SAMPLE_RATE         48000
+#define AUD_SPK_BYTES_PER_SAMPLE    2
+#define AUD_SPK_BITS_PER_SAMPLE     16
+#define AUD_SPK_CHANNELS            1
 
-#define CFG_TUD_AUDIO_FUNC_1_DESC_LEN                                 TUD_AUDIO_SPEAKER_MONO_FB_DESC_LEN
-#define CFG_TUD_AUDIO_FUNC_1_N_AS_INT                                 1                                       // Number of Standard AS Interface Descriptors (4.9.1) defined per audio function - this is required to be able to remember the current alternate settings of these interfaces - We restrict us here to have a constant number for all audio functions (which means this has to be the maximum number of AS interfaces an audio function has and a second audio function with less AS interfaces just wastes a few bytes)
-#define CFG_TUD_AUDIO_FUNC_1_CTRL_BUF_SZ                              64                                      // Size of control request buffer
+#define AUD_MIC_SAMPLE_RATE         32000
+#define AUD_MIC_BYTES_PER_SAMPLE    2
+#define AUD_MIC_BITS_PER_SAMPLE     16
+#define AUD_MIC_CHANNELS            1
 
-#define CFG_TUD_AUDIO_ENABLE_EP_OUT                                   1
-#define CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_RX                    2
-#define CFG_TUD_AUDIO_FUNC_1_RESOLUTION_RX                            16
-#define CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX                            1
+#define CFG_TUD_AUDIO_FUNC_1_DESC_LEN       TUD_AUDIO_SPEAKER_MONO_FB_DESC_LEN
+#define CFG_TUD_AUDIO_FUNC_1_N_AS_INT       1   // Number of Standard AS Interface Descriptors (4.9.1) defined per audio function - this is required to be able to remember the current alternate settings of these interfaces - We restrict us here to have a constant number for all audio functions (which means this has to be the maximum number of AS interfaces an audio function has and a second audio function with less AS interfaces just wastes a few bytes)
+#define CFG_TUD_AUDIO_FUNC_1_CTRL_BUF_SZ    64  // Size of control request buffer
 
-#define CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX        TUD_AUDIO_EP_SIZE(CFG_TUD_AUDIO_FUNC_1_MAX_SAMPLE_RATE, CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_RX, CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX)
-#define CFG_TUD_AUDIO_FUNC_1_EP_OUT_SW_BUF_SZ     (TUD_OPT_HIGH_SPEED ? 32 : 4) * CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX // Example read FIFO every 1ms, so it should be 8 times larger for HS device
+#define CFG_TUD_AUDIO_ENABLE_EP_OUT             1
+#define CFG_TUD_AUDIO_ENABLE_FEEDBACK_EP        1
+#define CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX      TUD_AUDIO_EP_SIZE(AUD_SPK_SAMPLE_RATE, AUD_SPK_BYTES_PER_SAMPLE, AUD_SPK_CHANNELS)
+#define CFG_TUD_AUDIO_FUNC_1_EP_OUT_SW_BUF_SZ   (TUD_OPT_HIGH_SPEED ? 32 : 4) * CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX // 1.1 (FS) reads once per ms, 2.0 (HS) is 8x faster (hence 32)
 
-#define CFG_TUD_AUDIO_ENABLE_FEEDBACK_EP                             1
 
 #ifdef __cplusplus
     }

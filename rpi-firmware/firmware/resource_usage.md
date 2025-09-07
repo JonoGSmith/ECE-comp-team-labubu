@@ -17,3 +17,4 @@
 - PIO Blocks: 2 blocks * 4 state machines
   - PIO0
     - 1 `sm` state machine (`i2s_dac`)
+

@@ -36,7 +36,7 @@ namespace dev::dac{
 
         load_samples(buf);
 
-        // Prime the DMA that just finished to run again
+        // Prime the DMA that finished. It'll be auto-triggered by the other one when ready.
         dma_channel_set_read_addr(ch, buf.begin(), false);
         dma_channel_acknowledge_irq0(ch);
     }

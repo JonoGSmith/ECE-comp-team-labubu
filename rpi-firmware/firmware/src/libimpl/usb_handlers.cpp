@@ -47,18 +47,18 @@ void tud_cdc_rx_cb(uint8_t itf){
 // The audio protocol backend
 // --------------------------------------
 
-static array<bool, 2> muteCtrls = {}; // 0: Master, 1: First channel (mono)
-static array<s16, 2> volumeCtrls = {};
+static array<bool, 1+AUD_SPK_CHANNELS> muteCtrls = {}; // 0: Master, 1: First channel (mono)
+static array<s16, 1+AUD_SPK_CHANNELS> volumeCtrls = {};
 
-static uint32_t sampFreq = CFG_TUD_AUDIO_FUNC_1_SAMPLE_RATE; // const?
+static uint32_t sampFreq = AUD_SPK_SAMPLE_RATE; // const?
 static uint8_t clkValid = 1;
 
 static audio_control_range_2_n_t(1) volumeRng[2]; // Volume range state
 static audio_control_range_4_n_t(1) sampleFreqRng = {
     .wNumSubRanges = 1,
     .subrange = {{
-        .bMin = CFG_TUD_AUDIO_FUNC_1_SAMPLE_RATE,
-        .bMax = CFG_TUD_AUDIO_FUNC_1_SAMPLE_RATE,
+        .bMin = AUD_SPK_SAMPLE_RATE,
+        .bMax = AUD_SPK_SAMPLE_RATE,
         .bRes = 0,
     }}
 }; // Sample frequency range state
@@ -205,15 +205,15 @@ bool tud_audio_get_req_entity_cb(uint8_t rhport, tusb_control_request_t const* p
 
 bool tud_audio_rx_done_pre_read_cb(uint8_t rhport, uint16_t n_bytes_received, uint8_t func_id, uint8_t ep_out, uint8_t cur_alt_setting) {
     using namespace dev::dac;
-    // // Copy into the ring buffer
-    // u16 bytesRead = tud_audio_read(gAudioOutputBuffer.write_head(), gAudioOutputBuffer.dist_till_wrap() * 2);
-    // u16 remaining = n_bytes_received - remaining;
-    // if(remaining > 0){ // wrapping write
-    //     bytesRead = tud_audio_read(gAudioOutputBuffer.ring.begin(), remaining); // read the exact amount.
-    //     gAudioOutputBuffer.write = bytesRead / 2;
-    // }else{
-    //     gAudioOutputBuffer.write += bytesRead / 2;
-    // }
+    // Copy into the ring buffer
+    u16 bytesRead = tud_audio_read(gAudioOutputBuffer.write_head(), gAudioOutputBuffer.dist_till_wrap() * 2);
+    u16 remaining = n_bytes_received - remaining;
+    if(remaining > 0){ // wrapping write
+        bytesRead = tud_audio_read(gAudioOutputBuffer.ring.begin(), remaining); // read the exact amount.
+        gAudioOutputBuffer.write = bytesRead / 2;
+    }else{
+        gAudioOutputBuffer.write += bytesRead / 2;
+    }
     return true;
 }
 
@@ -224,5 +224,5 @@ bool tud_audio_set_itf_close_EP_cb(uint8_t rhport, tusb_control_request_t const*
 void tud_audio_feedback_params_cb(uint8_t func_id, uint8_t alt_itf, audio_feedback_params_t* feedback_param) {
     // Set feedback method to fifo counting
     feedback_param->method = AUDIO_FEEDBACK_METHOD_FIFO_COUNT;
-    feedback_param->sample_freq = CFG_TUD_AUDIO_FUNC_1_SAMPLE_RATE;
+    feedback_param->sample_freq = AUD_SPK_SAMPLE_RATE;
 }

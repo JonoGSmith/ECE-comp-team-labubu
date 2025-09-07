@@ -24,12 +24,12 @@ enum StringDescriptors{
 //--------------------------------------------------------------------
 
 enum EndpointsOut{
-    EPO_CDC = 0x02,
-    EPO_AUD = 0x03,
+    EPO_CDC = 0x01,
+    EPO_AUD = 0x02,
 };
 enum EndpointsIn{
-    EPI_CDC_CMD = 0x81,
-    EPI_CDC = 0x82,
+    EPI_CDC = 0x81,
+    EPI_CDC_CMD = 0x82,
     EPI_AUD_FB = 0x83,
 };
 
@@ -83,12 +83,9 @@ static constexpr auto usbd_desc_cfg = []()consteval{
 
         TUD_RPI_RESET_DESCRIPTOR(ITF_RPI_RESET, SD_RPI_RESET)
 
-        TUD_AUDIO_SPEAKER_MONO_FB_DESCRIPTOR(ITF_AUDIO_CONTROL,
-            SD_UAC_COMPOSITE,
-            CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_RX,
-            CFG_TUD_AUDIO_FUNC_1_RESOLUTION_RX,
-            EPO_AUD,
-            CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX,
+        TUD_AUDIO_SPEAKER_MONO_FB_DESCRIPTOR(ITF_AUDIO_CONTROL, SD_UAC_COMPOSITE,
+            AUD_SPK_BYTES_PER_SAMPLE, AUD_SPK_BITS_PER_SAMPLE,
+            EPO_AUD, CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX,
             EPI_AUD_FB, 4)
     });
     temp[2] = sizeof(temp); // Patch in the correct length
