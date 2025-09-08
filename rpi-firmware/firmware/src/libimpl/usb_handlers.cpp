@@ -205,16 +205,19 @@ bool tud_audio_get_req_entity_cb(uint8_t rhport, tusb_control_request_t const* p
 
 bool tud_audio_rx_done_pre_read_cb(uint8_t rhport, uint16_t n_bytes_received, uint8_t func_id, uint8_t ep_out, uint8_t cur_alt_setting) {
     using namespace dev::dac;
-    // Read as much as possible into the buffer (before the wrap point)
-    u32 bytesTillWrap = gAudioRecvBuffer.dist_till_writer_wrap() * sizeof(MonoAudioSampleBE); // Maximum to read.
-    u32 bytesToRead = std::min(bytesTillWrap, (u32)n_bytes_received);
-    u32 bytesPreWrap = tud_audio_read(gAudioRecvBuffer.write_head(), bytesToRead);            // Actual amount read.
+    if (n_bytes_received == 0) return true; // Defensive: if nothing to read, return quickly
+
+    // First chunk: up to end-of-ring
+    u32 bytesTillWrap = gAudioRecvBuffer.dist_till_writer_wrap() * sizeof(MonoAudioSampleBE);
+    auto bytesToReadFirst = std::min<u32>(bytesTillWrap, n_bytes_received);
+    auto bytesPreWrap = tud_audio_read(gAudioRecvBuffer.write_head(), bytesToReadFirst);
     gAudioRecvBuffer.write_reserve_n(bytesPreWrap / sizeof(MonoAudioSampleBE));
 
-    bool hasRemaining = bytesPreWrap < n_bytes_received;    // If actual is less than predicted, there's still stuff in the queue.
-    if(hasRemaining){
-        u32 bytesPostWrap = tud_audio_read(gAudioRecvBuffer.ring.begin(), gAudioRecvBuffer.dist_till_writer_wrap() * sizeof(MonoAudioSampleBE));
-        gAudioRecvBuffer.write_reserve_n(bytesPreWrap / sizeof(MonoAudioSampleBE));
+    // If there is more remaining (wrap happened), read the rest at ring.begin()
+    u16 remaining = n_bytes_received - bytesPreWrap;
+    if(remaining){
+        auto bytesPostWrap = tud_audio_read(gAudioRecvBuffer.ring.begin(), remaining);
+        gAudioRecvBuffer.write_reserve_n(bytesPostWrap / sizeof(MonoAudioSampleBE));
     }
 
     return true;
