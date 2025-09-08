@@ -4,3 +4,5 @@ build/
 # MacOS
 .DS_Store
 ._*
+
+.env
