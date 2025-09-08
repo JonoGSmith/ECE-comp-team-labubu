@@ -18,7 +18,7 @@ namespace dev::dac{
             auto word = gAudioRecvBuffer.read_one();
             // s16 sword = word;
             s32 sample = word;
-            into[w] = I2SAudioSample{.l = sample * (1 << 11), .r = sample * (1 << 11)}; // quieted for my ears' sanity.
+            into[w] = I2SAudioSample{.l = sample * (1 << 11), .r = sample * (1 << 11)}; // quieted for my ears' sanity (max volume is << 16)
             w += 1;
         }
         // Run out of audio. This supresses garbage but indicates not enough data.

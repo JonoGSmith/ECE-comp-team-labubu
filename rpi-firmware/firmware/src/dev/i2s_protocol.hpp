@@ -49,8 +49,10 @@ namespace dev::dac{
     inline DMAChannel gDMADataA;
     inline DMAChannel gDMADataB;
 
+    // FIXME: There is still an audio bug where the buffer sometimes over-runs and causes unusual skipping. Don't know what to do about it
+    // Because the buffer is small (512 of 48kHz), the skip is only 10ms and not the most noticable. With speech output, it should be fine?
     using MonoAudioSampleBE = s16;
-    inline RingArray<MonoAudioSampleBE, (size_t)(48000*0.05)> gAudioRecvBuffer; // USB / Bluetooth writes to this (50ms buffer)
+    inline RingArray<MonoAudioSampleBE, (1<<9)> gAudioRecvBuffer; // USB / Bluetooth writes to this
 
     // ----------------------------
 
@@ -111,11 +113,9 @@ namespace dev::dac{
     }
 
     inline void init(){
-        auto const& pio = pio0; // chosen pio
+        auto const& pio = pio0;
         auto sm = init_pio(pio);
-        gI2SOutBufA.fill(I2SAudioSample{.l = 0, .r = 0}); // Clean the buffers so they don't spit out noise
-        gI2SOutBufB.fill(I2SAudioSample{.l = 0, .r = 0});
-        gAudioRecvBuffer.ring.fill(0);
+        gAudioRecvBuffer.ring.fill(0); // Clean the buffer so it doesn't spit out noise
         init_dma(pio, sm); // set up dma to feed the state machine
         pio_sm_set_enabled(pio, sm, true); // Start the pio block. Empty I2S should be produced.
 

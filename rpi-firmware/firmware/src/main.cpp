@@ -41,8 +41,9 @@ int main(){
     init();
 
     // printf("Hello, world! Playing %d samples.\n", gTestAudioSize / sizeof(u16));
-    printf("WARNING! Crashes destroy eardrums! (Known bugs with usb audio)");
+    printf("WARNING! Use the headphone jack at your own risk. It can destroy your ears!\n");
     dev::dac::start();
+    dev::mic::start();
 
     auto once_per_second = make_timeout_time_ms(1000); // not strictly, but its ok.
     auto cook = make_timeout_time_ms(5000); // not strictly, but its ok.
@@ -56,14 +57,10 @@ int main(){
             set_obled(light_toggle);
             light_toggle = !light_toggle;
 
-            if(dev::dac::isDMA){
-                printf("DMA now %d\n", dev::dac::isDMA);
-                dev::dac::isDMA = 0;
-            }else{
-                printf("no dma...?\n");
-            }
+            printf("DMAcnt: spk %d, mic %d\n", dev::dac::isDMA, dev::mic::gDMACount);
+            dev::dac::isDMA = 0;
+            dev::mic::gDMACount = 0;
             once_per_second = delayed_by_ms(now, 1000);
-
         }
 
         // if(!done && absolute_time_diff_us(now, cook) <= 0){
