@@ -129,7 +129,7 @@ bool tud_audio_get_req_entity_cb(uint8_t rhport, tusb_control_request_t const* p
                 static audio_desc_channel_cluster_t ret;
                 // Those are dummy values for now
                 ret.bNrChannels = 1;
-                ret.bmChannelConfig = (audio_channel_config_t)0;
+                ret.bmChannelConfig = AUDIO_CHANNEL_CONFIG_FRONT_CENTER;
                 ret.iChannelNames = 0;
 
                 DEBUG("    Get terminal connector\r\n");
@@ -205,15 +205,18 @@ bool tud_audio_get_req_entity_cb(uint8_t rhport, tusb_control_request_t const* p
 
 bool tud_audio_rx_done_pre_read_cb(uint8_t rhport, uint16_t n_bytes_received, uint8_t func_id, uint8_t ep_out, uint8_t cur_alt_setting) {
     using namespace dev::dac;
-    // Copy into the ring buffer
-    u16 bytesRead = tud_audio_read(gAudioOutputBuffer.write_head(), gAudioOutputBuffer.dist_till_wrap() * 2);
-    u16 remaining = n_bytes_received - remaining;
-    if(remaining > 0){ // wrapping write
-        bytesRead = tud_audio_read(gAudioOutputBuffer.ring.begin(), remaining); // read the exact amount.
-        gAudioOutputBuffer.write = bytesRead / 2;
-    }else{
-        gAudioOutputBuffer.write += bytesRead / 2;
+    // Read as much as possible into the buffer (before the wrap point)
+    u32 bytesTillWrap = gAudioRecvBuffer.dist_till_writer_wrap() * sizeof(MonoAudioSampleBE); // Maximum to read.
+    u32 bytesToRead = std::min(bytesTillWrap, (u32)n_bytes_received);
+    u32 bytesPreWrap = tud_audio_read(gAudioRecvBuffer.write_head(), bytesToRead);            // Actual amount read.
+    gAudioRecvBuffer.write_reserve_n(bytesPreWrap / sizeof(MonoAudioSampleBE));
+
+    bool hasRemaining = bytesPreWrap < n_bytes_received;    // If actual is less than predicted, there's still stuff in the queue.
+    if(hasRemaining){
+        u32 bytesPostWrap = tud_audio_read(gAudioRecvBuffer.ring.begin(), gAudioRecvBuffer.dist_till_writer_wrap() * sizeof(MonoAudioSampleBE));
+        gAudioRecvBuffer.write_reserve_n(bytesPreWrap / sizeof(MonoAudioSampleBE));
     }
+
     return true;
 }
 

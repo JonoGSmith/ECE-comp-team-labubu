@@ -7,23 +7,39 @@ struct RingArray{
     u16 write = 0;
     u16 read = 0;
 
-    // // Inserts the given data into the ring array, wrapping on the edge. Hopefully you don't crush the buffer (you can).
-    // static constexpr auto insert(SelfMut, span<T> data){
-    //     auto remaining = self.dist_till_wrap();
-    //     auto phase1copy = std::min(remaining, data.size())
-    //     auto phase2copy = data.size() - phase1copy;
-    //     std::copy_n(data.begin(), phase1copy, self.ring.begin() + self.write);
-    //     if(phase2copy > 0){ // Wrapping copy
-    //         std::copy_n(data.begin() + phase1copy, phase2copy, self.ring.begin());
-    //         self.write = phase2copy;
-    //     }
-    // }
-
     constexpr auto write_head(SelfMut){
         return self.ring.begin() + self.write;
     }
+    constexpr auto read_head(SelfRef){
+        return self.ring.begin() + self.read;
+    }
 
-    constexpr auto dist_till_wrap(SelfRef){
+    constexpr auto dist_till_writer_wrap(SelfRef){
         return self.ring.size() - self.write;
+    }
+
+
+    // The maximum number of elements the buffer can hold.
+    constexpr u32 capacity(SelfRef){ return self.ring.size(); }
+    // Does the ring buffer currently hold wrapped data?
+    constexpr bool is_wrapping(SelfRef){ return self.write < self.read; }
+    // Number of elements icurrently in the buffer
+    constexpr u32 length(SelfRef){
+        u32 base = self.is_wrapping() ? self.capacity() : 0;
+        return base + self.write - self.read;
+    }
+    constexpr bool empty(SelfRef){
+        return self.read == self.write;
+    }
+
+    constexpr T read_one(SelfMut){
+        auto r = self.ring[self.read];
+        self.read += 1;
+        if(self.read >= self.capacity()){ self.read = 0; } // Wrap
+        return r;
+    }
+    constexpr void write_reserve_n(SelfMut, size_t nelems){
+        self.write += nelems;
+        self.write %= self.capacity();
     }
 };

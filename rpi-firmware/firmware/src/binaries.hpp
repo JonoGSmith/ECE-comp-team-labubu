@@ -1,4 +1,4 @@
 #pragma once
 #include "common.hpp"
 
-INCBIN_EXTERN(gTestAudio);
+// INCBIN_EXTERN(gTestAudio);

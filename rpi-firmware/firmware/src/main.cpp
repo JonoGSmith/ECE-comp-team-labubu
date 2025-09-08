@@ -34,6 +34,8 @@ void init(){
     set_obled(true); // Turn on the Pico W LED as proof of life.
 }
 
+decltype(dev::dac::gAudioRecvBuffer.ring) copy;
+
 int main(){
     bool light_toggle = true;
     init();
@@ -43,6 +45,8 @@ int main(){
     dev::dac::start();
 
     auto once_per_second = make_timeout_time_ms(1000); // not strictly, but its ok.
+    auto cook = make_timeout_time_ms(5000); // not strictly, but its ok.
+    bool done = false;
     while(true){
         auto now = get_absolute_time();
         dev::usb::tick();
@@ -59,7 +63,26 @@ int main(){
                 printf("no dma...?\n");
             }
             once_per_second = delayed_by_ms(now, 1000);
+
         }
+
+        // if(!done && absolute_time_diff_us(now, cook) <= 0){
+        //     done = true;
+        //     copy = dev::dac::gAudioRecvBuffer.ring;
+        //     size_t i = 0;
+        //     for(auto const& e: copy){
+        //         if(i % 16 == 0){
+        //             printf("\n");
+        //         }
+        //         u16 raw = e;
+        //         printf("%04x ", (unsigned int)raw);
+        //         i++;
+        //         if(i % 512 == 0){
+        //             dev::usb::tick();
+        //         }
+        //     }
+        //     printf("\n");
+        // }
         // dev::servo::set_rotation_angle(-90);
     }
 }

@@ -1,6 +1,7 @@
 #pragma once
 #include "../common.hpp"
 #include "../system.hpp"
+#include "../ring_array.hpp"
 
 extern "C" {
     #include "i2s.pio.h"
@@ -41,13 +42,16 @@ namespace dev::dac{
     constexpr u32 cI2S_LCK_RATE  = cI2SSampleRate; // 50% low (L), 50% hi (R)
     static_assert(cI2SBitDepth == 32, "Only 32 bit output is supported for the project.");
 
-    // TODO: THE DMA RATE IS 2X EXPECTED.
     using I2SOutBufHalf = array<I2SAudioSample, (size_t)(cI2SSampleRate * 0.001)>; // This is 1ms each. Should dma 1000 times a second
     inline I2SOutBufHalf gI2SOutBufA;
     inline I2SOutBufHalf gI2SOutBufB;
 
     inline DMAChannel gDMADataA;
     inline DMAChannel gDMADataB;
+
+    using MonoAudioSampleBE = s16;
+    inline RingArray<MonoAudioSampleBE, (size_t)(48000*0.05)> gAudioRecvBuffer; // USB / Bluetooth writes to this (50ms buffer)
+
     // ----------------------------
 
     inline u8 init_pio(PIO pio){
@@ -111,6 +115,7 @@ namespace dev::dac{
         auto sm = init_pio(pio);
         gI2SOutBufA.fill(I2SAudioSample{.l = 0, .r = 0}); // Clean the buffers so they don't spit out noise
         gI2SOutBufB.fill(I2SAudioSample{.l = 0, .r = 0});
+        gAudioRecvBuffer.ring.fill(0);
         init_dma(pio, sm); // set up dma to feed the state machine
         pio_sm_set_enabled(pio, sm, true); // Start the pio block. Empty I2S should be produced.
 

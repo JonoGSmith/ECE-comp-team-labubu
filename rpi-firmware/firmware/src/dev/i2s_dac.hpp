@@ -1,32 +1,30 @@
 #pragma once
 #include "../common.hpp"
 #include "i2s_protocol.hpp"
-#include "../ring_array.hpp"
-#include "../binaries.hpp"
 
 #include <hardware/dma.h>
-
-// NOTE: The following is all explicitly temporary and is designed to play a file off the device itself.
-// -----------------------------
-
-
-inline u32 sPlayHeadSamplePosition = 0;
 
 namespace dev::dac{
     static inline volatile u16 isDMA = 0;
 
-    using MonoAudioSample = s16;
-    static inline RingArray<MonoAudioSample, (1 << 11)> gAudioOutputBuffer;
+    // TODO: Volume control? Non-essential
 
-    // NOTE: This is explicitly temporary.
     inline void load_samples(I2SOutBufHalf& into){
-        // TODO: More efficient copy
-        auto audioData = (s8*)&gTestAudioData[0];
-        const auto audioDataLength = gTestAudioSize;
-        for(auto& d: into){ // Copy and convert (s16 mono -> s32 stereo)
-            d = I2SAudioSample{.l = (s32)audioData[sPlayHeadSamplePosition] << 19, .r = (s32)audioData[sPlayHeadSamplePosition] << 19};
-            sPlayHeadSamplePosition += 1;
-            sPlayHeadSamplePosition %= audioDataLength;
+        // The buffer needs to be completely filled with samples.
+        // We take as much as we can from gAudioRecvBuffer till it's empty, then we spit out zeros
+        auto recvCurrLength = gAudioRecvBuffer.length();
+        size_t w = 0;
+        while(w < into.size() && w < recvCurrLength){
+            auto word = gAudioRecvBuffer.read_one();
+            // s16 sword = word;
+            s32 sample = word;
+            into[w] = I2SAudioSample{.l = sample * (1 << 11), .r = sample * (1 << 11)}; // quieted for my ears' sanity.
+            w += 1;
+        }
+        // Run out of audio. This supresses garbage but indicates not enough data.
+        while(w < into.size()){
+            into[w] = I2SAudioSample{.l = 0, .r = 0};
+            w += 1;
         }
     }
 
@@ -42,7 +40,7 @@ namespace dev::dac{
     }
 
     inline void dma_handler(){
-        isDMA += 1; // TODO: debug counter
+        isDMA += 1; // Debug counter
         dma_handle_channel(gDMADataA, gI2SOutBufA);
         dma_handle_channel(gDMADataB, gI2SOutBufB);
     }
