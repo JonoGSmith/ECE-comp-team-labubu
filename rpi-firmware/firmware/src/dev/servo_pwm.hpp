@@ -22,7 +22,7 @@ namespace dev::servo{
 
     // Global variables
     // -----------------------
-    u8 gPWMSlice;
+    inline u8 gPWMSlice;
 
     // sad forward declarations
     constexpr void set_rotation_angle(f32 degrees);

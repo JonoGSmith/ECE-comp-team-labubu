@@ -3,6 +3,7 @@
 #include "../dev/i2s_protocol.hpp"
 #include "../dev/i2s_dac.hpp"
 #include "../dev/mic_adc.hpp"
+#include "../console.hpp"
 
 #include <stdio.h>
 #include "pico/stdlib.h"
@@ -29,17 +30,33 @@ void tud_resume_cb(){}
 
 void tud_cdc_rx_cb(uint8_t itf){
     // Only one CDC interface exists on the device, so `itf` is ignored.
-    static array<u8, 64> buf;
+    static array<u8, 128> buf;
+    static u32 buf_write_head = 0;
+
     if(tud_cdc_connected() && tud_cdc_available() > 0) {
-        u32 count = tud_cdc_read(buf.begin(), sizeof(buf));
-        // Need to process the data now. It may be fragmented
-        for(size_t i = 0; i < count; i++) {
-            if(buf[i] == '\n') {
-                // PROCESS THE LINE HERE
-                sv msg = "Helo! I am unda da wata!";
+        // Add the text into the buffer
+        buf_write_head += tud_cdc_read(&buf[buf_write_head], sizeof(buf) - buf_write_head);
+        // Look for the newlines and process the strings
+        {
+            u32 front = 0;
+            for(size_t i = 0; i < buf_write_head; i++){
+                if(buf[i] != '\n') continue;
+                auto s = sv{(char*)&buf[front], i - front};
+                front = i + 1; // skip \n
+                console::processline(s);
+            }
+            if(front == 0 && buf_write_head == sizeof(buf)){ // Traversed the whole buffer without finding a newline
+                sv msg = "Message too long. Ignored";
                 tud_cdc_write(msg.begin(), msg.size());
                 tud_cdc_write_flush();
             }
+            // Move the remaining characters into the front of the buf in prep for the next recv.
+            bool buf_full = front >= sizeof(buf);
+            auto buf_remainder = buf_write_head - front;
+            if(buf_full){
+                std::copy_n(buf.begin() + front, buf_remainder, buf.begin());
+            }
+            buf_write_head = buf_full ? 0 : buf_remainder;
         }
     }
 }
