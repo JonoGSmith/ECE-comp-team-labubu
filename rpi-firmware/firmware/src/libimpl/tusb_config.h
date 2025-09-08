@@ -105,15 +105,19 @@
 #define AUD_MIC_BITS_PER_SAMPLE     16
 #define AUD_MIC_CHANNELS            1
 
-#define CFG_TUD_AUDIO_FUNC_1_DESC_LEN       TUD_AUDIO_SPEAKER_MONO_FB_DESC_LEN
-#define CFG_TUD_AUDIO_FUNC_1_N_AS_INT       1   // Number of Standard AS Interface Descriptors (4.9.1) defined per audio function - this is required to be able to remember the current alternate settings of these interfaces - We restrict us here to have a constant number for all audio functions (which means this has to be the maximum number of AS interfaces an audio function has and a second audio function with less AS interfaces just wastes a few bytes)
-#define CFG_TUD_AUDIO_FUNC_1_CTRL_BUF_SZ    64  // Size of control request buffer
+#define CFG_TUD_AUDIO_FUNC_1_DESC_LEN           TUD_AUDIO_SPEAKER_MONO_FB_DESC_LEN
+#define CFG_TUD_AUDIO_FUNC_1_N_AS_INT           1   // Number of Standard AS Interface Descriptors (4.9.1) defined per audio function - this is required to be able to remember the current alternate settings of these interfaces - We restrict us here to have a constant number for all audio functions (which means this has to be the maximum number of AS interfaces an audio function has and a second audio function with less AS interfaces just wastes a few bytes)
+#define CFG_TUD_AUDIO_FUNC_1_CTRL_BUF_SZ        64  // Size of control request buffer
 
 #define CFG_TUD_AUDIO_ENABLE_EP_OUT             1
-#define CFG_TUD_AUDIO_ENABLE_FEEDBACK_EP        1
+#define CFG_TUD_AUDIO_ENABLE_FEEDBACK_EP        1 // TODO: We don't use this yet, but this could be used to prevent buffer overruns?
 #define CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX      TUD_AUDIO_EP_SIZE(AUD_SPK_SAMPLE_RATE, AUD_SPK_BYTES_PER_SAMPLE, AUD_SPK_CHANNELS)
 #define CFG_TUD_AUDIO_FUNC_1_EP_OUT_SW_BUF_SZ   (TUD_OPT_HIGH_SPEED ? 32 : 4) * CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX // 1.1 (FS) reads once per ms, 2.0 (HS) is 8x faster (hence 32)
 
+#define CFG_TUD_AUDIO_ENABLE_EP_IN              1
+#define CFG_TUD_AUDIO_ENABLE_INTERRUPT_EP       1 // Allow volume controlled by on-baord button
+#define CFG_TUD_AUDIO_FUNC_1_EP_IN_SZ_MAX       TUD_AUDIO_EP_SIZE(AUD_MIC_SAMPLE_RATE, AUD_MIC_BYTES_PER_SAMPLE, AUD_MIC_CHANNELS)
+#define CFG_TUD_AUDIO_FUNC_1_EP_IN_SW_BUF_SZ    (TUD_OPT_HIGH_SPEED ? 32 : 4) * CFG_TUD_AUDIO_FUNC_1_EP_IN_SZ_MAX
 
 #ifdef __cplusplus
     }

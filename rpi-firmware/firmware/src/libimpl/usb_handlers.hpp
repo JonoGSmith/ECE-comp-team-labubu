@@ -1,10 +1,10 @@
 #pragma once
-//--------------------------------------------------------------------
-// AUDIO
-//--------------------------------------------------------------------
 
-// Defined in TUD_AUDIO_SPEAKER_STEREO_FB_DESCRIPTOR
-#define UAC2_ENTITY_INPUT_TERMINAL      0x01
-#define UAC2_ENTITY_FEATURE_UNIT        0x02
-#define UAC2_ENTITY_OUTPUT_TERMINAL     0x03
-#define UAC2_ENTITY_CLOCK               0x04
+// Terminal IDs of importance to the descriptors and handlers
+// Unit numbers are arbitrary selected
+#define TERMID_CLK          0x04
+#define TERMID_SPK_IN       0x01
+#define TERMID_SPK_FEAT     0x02
+#define TERMID_SPK_OUT      0x03
+#define TERMID_MIC_IN       0x11
+#define TERMID_MIC_OUT      0x13

@@ -53,7 +53,7 @@ static array<s16, 1+AUD_SPK_CHANNELS> volumeCtrls = {};
 static uint32_t sampFreq = AUD_SPK_SAMPLE_RATE; // const?
 static uint8_t clkValid = 1;
 
-static audio_control_range_2_n_t(1) volumeRng[2]; // Volume range state
+static audio_control_range_2_n_t(1) volumeRng[1+AUD_SPK_CHANNELS]; // Volume range state
 static audio_control_range_4_n_t(1) sampleFreqRng = {
     .wNumSubRanges = 1,
     .subrange = {{
@@ -90,7 +90,7 @@ bool tud_audio_set_req_entity_cb(uint8_t rhport, tusb_control_request_t const* p
     TU_VERIFY(p_request->bRequest == AUDIO_CS_REQ_CUR);
 
     // If request is for our feature unit
-    if(entityID == UAC2_ENTITY_FEATURE_UNIT) {
+    if(entityID == TERMID_SPK_FEAT) {
         switch(ctrlSel) {
             case AUDIO_FU_CTRL_MUTE: { // Request uses format layout 1
                 TU_VERIFY(p_request->wLength == sizeof(audio_control_cur_1_t));
@@ -122,7 +122,7 @@ bool tud_audio_get_req_entity_cb(uint8_t rhport, tusb_control_request_t const* p
     u8 entityID   = TU_U16_HIGH(p_request->wIndex);
 
     // Input terminal (Speaker input)
-    if(entityID == UAC2_ENTITY_INPUT_TERMINAL) {
+    if(entityID == TERMID_SPK_IN) {
         switch(ctrlSel) {
             case AUDIO_TE_CTRL_CONNECTOR: {
                 // The terminal connector control only has a get request with only the CUR attribute.
@@ -141,7 +141,7 @@ bool tud_audio_get_req_entity_cb(uint8_t rhport, tusb_control_request_t const* p
     }
 
     // Feature unit
-    if(entityID == UAC2_ENTITY_FEATURE_UNIT) {
+    if(entityID == TERMID_SPK_FEAT) {
         switch(ctrlSel) {
             case AUDIO_FU_CTRL_MUTE:
                 // Audio control mute cur parameter block consists of only one byte - we thus can send it right away
@@ -174,7 +174,7 @@ bool tud_audio_get_req_entity_cb(uint8_t rhport, tusb_control_request_t const* p
     }
 
     // Clock Source unit
-    if(entityID == UAC2_ENTITY_CLOCK) {
+    if(entityID == TERMID_CLK) {
         switch(ctrlSel) {
             case AUDIO_CS_CTRL_SAM_FREQ:
                 // channelNum is always zero in this case

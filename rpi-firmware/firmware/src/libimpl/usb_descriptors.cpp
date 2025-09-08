@@ -8,6 +8,7 @@ extern "C" {
 
 #include "../common.hpp"
 #include "../endian.hpp"
+#include "usb_handlers.hpp"
 
 enum StringDescriptors{
     SD_LANGUAGE = 0,
@@ -16,7 +17,8 @@ enum StringDescriptors{
     SD_SERIALNUMBER,
     SD_CDC,
     SD_RPI_RESET,
-    SD_UAC_COMPOSITE,
+    SD_UAC_SPEAKER,
+    SD_UAC_MICROPHONE,
 };
 
 //--------------------------------------------------------------------
@@ -25,12 +27,14 @@ enum StringDescriptors{
 
 enum EndpointsOut{
     EPO_CDC = 0x01,
-    EPO_AUD = 0x02,
+    EPO_AUD = 0x04,
 };
 enum EndpointsIn{
     EPI_CDC = 0x81,
     EPI_CDC_CMD = 0x82,
-    EPI_AUD_FB = 0x83,
+    EPI_AUD_INT = 0x83,
+    EPI_AUD = 0x84,
+    EPI_AUD_FB = 0x85,
 };
 
 enum InterfaceIDs{
@@ -38,7 +42,8 @@ enum InterfaceIDs{
     ITF_CDC_DATA, // Implicit (keep directly after CDC)
     ITF_RPI_RESET,
     ITF_AUDIO_CONTROL,
-    ITF_AUDIO2, // Implicit (keep directly after AUDIO_CONTROL)
+    ITF_AUDIO_SPEAKER,
+    ITF_AUDIO_MICROPHONE,
     ITF_COUNTOF
 };
 
@@ -47,7 +52,7 @@ enum InterfaceIDs{
 //--------------------------------------------------------------------
 
 #define TUD_RPI_RESET_DESCRIPTOR(_itfnum, _stridx) \
-    9, TUSB_DESC_INTERFACE, _itfnum, 0, 0, TUSB_CLASS_VENDOR_SPECIFIC, RESET_INTERFACE_SUBCLASS, RESET_INTERFACE_PROTOCOL, _stridx,
+    9, TUSB_DESC_INTERFACE, _itfnum, 0, 0, TUSB_CLASS_VENDOR_SPECIFIC, RESET_INTERFACE_SUBCLASS, RESET_INTERFACE_PROTOCOL, _stridx
 
 //--------------------------------------------------------------------
 // GENERAL
@@ -56,19 +61,76 @@ enum InterfaceIDs{
 static constexpr tusb_desc_device_t usbd_desc_device = {
     .bLength = sizeof(tusb_desc_device_t),
     .bDescriptorType = TUSB_DESC_DEVICE,
-    .bcdUSB = 0x0200, // TODO: All examples are using this, but its wrong? USB 1.1?
+    .bcdUSB = 0x0200, // But FullSpeed is the max
     .bDeviceClass = TUSB_CLASS_MISC,
     .bDeviceSubClass = MISC_SUBCLASS_COMMON,
     .bDeviceProtocol = MISC_PROTOCOL_IAD,
     .bMaxPacketSize0 = CFG_TUD_ENDPOINT0_SIZE,
     .idVendor  = 0x2E8A, // Raspberry Pi
-    .idProduct = 0x0009, // Raspberry Pi Pico SDK CDC
+    .idProduct = 0x0010, // Raspberry Pi Pico SDK CDC
     .bcdDevice = 0x0100, // Device version (Binary Coded Decimal)
     .iManufacturer = SD_MANUFACTURER,
     .iProduct      = SD_PRODUCT,
     .iSerialNumber = SD_SERIALNUMBER,
     .bNumConfigurations = 1,
 };
+
+#define NO_STR 0
+
+// Descritpors for the desktop speaker
+#define UAC2_DESCRIPTORS_B \
+    /* Clock Source Descriptor(4.7.2.1) */\
+    TUD_AUDIO_DESC_CLK_SRC(TERMID_CLK, /*_attr*/ AUDIO_CLOCK_SOURCE_ATT_INT_FIX_CLK, /*_ctrl*/ (AUDIO_CTRL_R << AUDIO_CLOCK_SOURCE_CTRL_CLK_FRQ_POS), /*_assocTerm*/ 0x01, NO_STR),\
+    /* I/O Speaker */\
+    TUD_AUDIO_DESC_INPUT_TERM(TERMID_SPK_IN, AUDIO_TERM_TYPE_USB_STREAMING, /*_assocTerm*/ 0x00, TERMID_CLK, AUD_SPK_CHANNELS, AUDIO_CHANNEL_CONFIG_NON_PREDEFINED, NO_STR, 0, NO_STR),\
+    /* Feature Unit Descriptor(4.7.2.8): Speaker: Can mute & control master volume. Can write samples to individual channels (just the one). */\
+    TUD_AUDIO_DESC_FEATURE_UNIT_ONE_CHANNEL(TERMID_SPK_FEAT, TERMID_SPK_IN, /*master_ctrl*/ AUDIO_CTRL_RW << AUDIO_FEATURE_UNIT_CTRL_MUTE_POS | AUDIO_CTRL_RW << AUDIO_FEATURE_UNIT_CTRL_VOLUME_POS, /*ch1_ctrl*/ AUDIO_CTRL_RW << AUDIO_FEATURE_UNIT_CTRL_MUTE_POS | AUDIO_CTRL_RW << AUDIO_FEATURE_UNIT_CTRL_VOLUME_POS, NO_STR),\
+    /* Needed? */\
+    TUD_AUDIO_DESC_OUTPUT_TERM(TERMID_SPK_OUT, AUDIO_TERM_TYPE_OUT_GENERIC_SPEAKER, /*_assocTerm*/ 0x01, TERMID_SPK_FEAT, TERMID_CLK, /*_ctrl*/ 0, NO_STR),\
+    /* I/O Microphone */\
+    TUD_AUDIO_DESC_INPUT_TERM(TERMID_MIC_IN, AUDIO_TERM_TYPE_IN_GENERIC_MIC, /*_assocTerm*/ 0, TERMID_CLK, AUD_MIC_CHANNELS, AUDIO_CHANNEL_CONFIG_NON_PREDEFINED, NO_STR, 0, NO_STR),\
+    TUD_AUDIO_DESC_OUTPUT_TERM(TERMID_MIC_OUT, AUDIO_TERM_TYPE_USB_STREAMING, /*_assocTerm*/ 0, TERMID_MIC_IN, TERMID_CLK, /*_ctrl*/ 0, NO_STR),\
+    TUD_AUDIO_DESC_STD_AC_INT_EP(EPI_AUD_INT, /*_interval*/ 1)
+
+#define UAC2_DESCRIPTORS \
+    /* Standard Interface Association Descriptor (IAD): Tells the host to strongly group UAC, Speaker, & Mic interfaces*/\
+    TUD_AUDIO_DESC_IAD(ITF_AUDIO_CONTROL, 3, NO_STR),\
+    /* Standard AC Interface Descriptor(4.7.1) */\
+    TUD_AUDIO_DESC_STD_AC(ITF_AUDIO_CONTROL, /*only ctrl*/0, SD_UAC_SPEAKER), \
+    /* Class-Specific AC Interface Header Descriptor(4.7.2) */\
+    TUD_AUDIO_DESC_CS_AC(0x0200, AUDIO_FUNC_DESKTOP_SPEAKER, sizeof(std::to_array<u8>({UAC2_DESCRIPTORS_B})), 0),\
+    UAC2_DESCRIPTORS_B, \
+    \
+    /* Standard AS Interface Descriptor(4.9.1): SPEAKER*/\
+    /* Interface 1, Alternate 0 - default alternate setting with 0 bandwidth */\
+    TUD_AUDIO_DESC_STD_AS_INT(ITF_AUDIO_SPEAKER, 0, 0, SD_UAC_SPEAKER),\
+    /* Interface 1, Alternate 1 - alternate interface for data streaming (speaker mono channel) */\
+    TUD_AUDIO_DESC_STD_AS_INT(ITF_AUDIO_SPEAKER, 1, 2, SD_UAC_SPEAKER),\
+        /* Class-Specific AS Interface Descriptor(4.9.2) */\
+        TUD_AUDIO_DESC_CS_AS_INT(TERMID_SPK_IN, AUDIO_CTRL_NONE, AUDIO_FORMAT_TYPE_I, AUDIO_DATA_FORMAT_TYPE_I_PCM, AUD_SPK_CHANNELS, AUDIO_CHANNEL_CONFIG_NON_PREDEFINED, NO_STR),\
+        /* Type I Format Type Descriptor(2.3.1.6 - Audio Formats) */\
+        TUD_AUDIO_DESC_TYPE_I_FORMAT(AUD_SPK_BYTES_PER_SAMPLE, AUD_SPK_BITS_PER_SAMPLE),\
+        /* Standard AS Isochronous Audio Data Endpoint Descriptor(4.10.1.1) */\
+        TUD_AUDIO_DESC_STD_AS_ISO_EP(EPO_AUD, ((u8)TUSB_XFER_ISOCHRONOUS | (u8)TUSB_ISO_EP_ATT_ASYNCHRONOUS | (u8)TUSB_ISO_EP_ATT_DATA), CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX, /*_interval*/ 1),\
+        /* Class-Specific AS Isochronous Audio Data Endpoint Descriptor(4.10.1.2) */\
+        TUD_AUDIO_DESC_CS_AS_ISO_EP(AUDIO_CS_AS_ISO_DATA_EP_ATT_NON_MAX_PACKETS_OK, AUDIO_CTRL_NONE, AUDIO_CS_AS_ISO_DATA_EP_LOCK_DELAY_UNIT_UNDEFINED, /*_lockdelay TODO: What*/ 0x0000),\
+        /* Standard AS Isochronous Feedback Endpoint Descriptor(4.10.2.1) */\
+        TUD_AUDIO_DESC_STD_AS_ISO_FB_EP(EPI_AUD_FB, 4, 1),\
+    \
+    /* Standard AS Interface Descriptor(4.9.1): MICROPHONE */\
+    /* Interface 2, Alternate 0 - default alternate setting with 0 bandwidth.*/\
+    TUD_AUDIO_DESC_STD_AS_INT(ITF_AUDIO_MICROPHONE, 0, 0, SD_UAC_MICROPHONE),\
+    /* Interface 2, Alternate 1 - alternate interface for data streaming */\
+    TUD_AUDIO_DESC_STD_AS_INT(ITF_AUDIO_MICROPHONE, 1, 1, SD_UAC_MICROPHONE),\
+        /* Class-Specific AS Interface Descriptor(4.9.2) */\
+        TUD_AUDIO_DESC_CS_AS_INT(TERMID_MIC_OUT, AUDIO_CTRL_NONE, AUDIO_FORMAT_TYPE_I, AUDIO_DATA_FORMAT_TYPE_I_PCM, AUD_MIC_CHANNELS, AUDIO_CHANNEL_CONFIG_NON_PREDEFINED, NO_STR),\
+        /* Type I Format Type Descriptor(2.3.1.6 - Audio Formats) */\
+        TUD_AUDIO_DESC_TYPE_I_FORMAT(AUD_MIC_BYTES_PER_SAMPLE, AUD_MIC_BITS_PER_SAMPLE),\
+        /* Standard AS Isochronous Audio Data Endpoint Descriptor(4.10.1.1) */\
+        TUD_AUDIO_DESC_STD_AS_ISO_EP(EPI_AUD, ((u8)TUSB_XFER_ISOCHRONOUS | (u8)TUSB_ISO_EP_ATT_ASYNCHRONOUS | (u8)TUSB_ISO_EP_ATT_DATA), CFG_TUD_AUDIO_FUNC_1_EP_IN_SZ_MAX, /*_interval*/ 0x01),\
+        /* Class-Specific AS Isochronous Audio Data Endpoint Descriptor(4.10.1.2) */\
+        TUD_AUDIO_DESC_CS_AS_ISO_EP(AUDIO_CS_AS_ISO_DATA_EP_ATT_NON_MAX_PACKETS_OK, AUDIO_CTRL_NONE, AUDIO_CS_AS_ISO_DATA_EP_LOCK_DELAY_UNIT_UNDEFINED, /*_lockdelay TODO*/ 0x0000)\
+
 
 constexpr bool attribBusPowered = true;
 constexpr bool attribSelfPowered = false;
@@ -78,17 +140,11 @@ static constexpr auto usbd_desc_cfg = []()consteval{
     constexpr u16 USBD_MAX_POWER_MA = 250;
     auto temp = std::to_array<u8>({
         TUD_CONFIG_DESCRIPTOR(1, ITF_COUNTOF, 0, /*len*/0, configAttribs, USBD_MAX_POWER_MA),
-
         TUD_CDC_DESCRIPTOR(ITF_CDC, SD_CDC, EPI_CDC_CMD, 8, EPO_CDC, EPI_CDC, 64),
-
-        TUD_RPI_RESET_DESCRIPTOR(ITF_RPI_RESET, SD_RPI_RESET)
-
-        TUD_AUDIO_SPEAKER_MONO_FB_DESCRIPTOR(ITF_AUDIO_CONTROL, SD_UAC_COMPOSITE,
-            AUD_SPK_BYTES_PER_SAMPLE, AUD_SPK_BITS_PER_SAMPLE,
-            EPO_AUD, CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX,
-            EPI_AUD_FB, 4)
+        TUD_RPI_RESET_DESCRIPTOR(ITF_RPI_RESET, SD_RPI_RESET),
+        UAC2_DESCRIPTORS
     });
-    temp[2] = sizeof(temp); // Patch in the correct length
+    temp[2] = sizeof(temp) & 0xff; // Patch in the correct length
     temp[3] = sizeof(temp) >> 8;
     return temp;
 }();
@@ -138,7 +194,8 @@ extern "C" u16 const* tud_descriptor_string_cb(u8 index, u16 langid) {
         X(SD_SERIALNUMBER, "E409053RealNumber");
         X(SD_CDC, "Board CDC");
         X(SD_RPI_RESET, "Pi-Reset");
-        X(SD_UAC_COMPOSITE, "Board Audio");
+        X(SD_UAC_SPEAKER, "UAC Speaker");
+        X(SD_UAC_MICROPHONE, "UAC Microphone");
     }
     return nullptr;
 }
