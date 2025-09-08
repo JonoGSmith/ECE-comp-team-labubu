@@ -3,6 +3,7 @@
 #include "../system.hpp"
 #include <hardware/adc.h>
 #include <hardware/dma.h>
+#include <tusb.h>
 
 // For reading from a mono-channel microphone.
 // Uses 2 DMAs in a ring formation to collect samples (same as i2s),
@@ -13,7 +14,7 @@
 namespace dev::mic{
     namespace cfg{
         constexpr u32 ADC_PIN = 2;
-        constexpr u32 SAMPLE_RATE = 32'000;
+        constexpr u32 SAMPLE_RATE = 48'000; // ehhh - rather be slower but its ok.
         constexpr f64 ADC_LEVEL_SHIFT = 1.5; // Volts
         // These are helper constants
         constexpr u32 ADC_PRECISION = 12; // bit depth
@@ -22,8 +23,9 @@ namespace dev::mic{
         constexpr u16 ADC_LEVEL_SHIFT_COUNT = (ADC_LEVEL_SHIFT / ADC_DELTA) * (1 << (16 - ADC_PRECISION));
     }
 
+    using USBAudioSample16 = s16;
     using ADCAudioSampleRaw = u16; // Level shifted 12 bit adc output
-    using ADCInBufHalf = array<ADCAudioSampleRaw, (size_t)(cfg::SAMPLE_RATE * 0.005)>; // 5ms
+    using ADCInBufHalf = array<ADCAudioSampleRaw, (size_t)(cfg::SAMPLE_RATE * 0.001)>; // 5ms
     inline DMAChannel gDMAadcA;
     inline DMAChannel gDMAadcB;
     inline ADCInBufHalf gSampleBufferA;
@@ -83,8 +85,9 @@ namespace dev::mic{
         dma_channel_start(gDMAadcA); // start the ping-pong
     }
 
+    // Add to the USB audio outgoing buffer
     inline void offload_samples(ADCInBufHalf const& from){
-        // TODO:
+        auto bytesWritten = tud_audio_write((uint8_t*)from.begin(), sizeof(from));
     }
 
     inline void dma_handle_channel(DMAChannel ch, ADCInBufHalf& buf, bool& full){
