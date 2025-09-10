@@ -86,6 +86,9 @@ template<typename T>
 constexpr T clamp(T ref low, T ref val, T ref high) {
     return std::min(std::max(val, low), high);
 }
+template<typename T> constexpr auto cmpeqfn(T a){
+    return [a](T ref with){ return a == with; };
+}
 
 // Reinterpretation helpers (avoids explicit mention of the type name if it can be deduced)
 template<class To> constexpr To ptr_cast(auto* p){ return reinterpret_cast<To>(p); }

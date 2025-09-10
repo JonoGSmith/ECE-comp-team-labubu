@@ -1,7 +1,7 @@
 #pragma once
 #include "../common.hpp"
 #include "../system.hpp"
-#include "../ring_array.hpp"
+#include "../ring_queue.hpp"
 
 extern "C" {
     #include "i2s.pio.h"
@@ -52,7 +52,7 @@ namespace dev::dac{
     // FIXME: There is still an audio bug where the buffer sometimes over-runs and causes unusual skipping. Don't know what to do about it
     // Because the buffer is small (512 of 48kHz), the skip is only 10ms and not the most noticable. With speech output, it should be fine?
     using MonoAudioSampleBE = s16;
-    inline RingArray<MonoAudioSampleBE, (1<<9)> gAudioRecvBuffer; // USB / Bluetooth writes to this
+    inline RingQueue<MonoAudioSampleBE, (1<<9)> gAudioRecvBuffer; // USB / Bluetooth writes to this
 
     // ----------------------------
 

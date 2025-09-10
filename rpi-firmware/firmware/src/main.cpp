@@ -54,7 +54,6 @@ int main(){
         dev::usb::tick();
         dev::btn::report_changes();
 
-        // Sleeping is now illegal.
         if(absolute_time_diff_us(now, once_per_second) <= 0){
             set_obled(light_toggle);
             light_toggle = !light_toggle;

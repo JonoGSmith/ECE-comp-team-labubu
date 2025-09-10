@@ -2,7 +2,7 @@
 #include "common.hpp"
 
 template<typename T, size_t N>
-struct RingArray{
+struct RingQueue{
     array<T, N> ring;
     u16 write = 0;
     u16 read = 0;
