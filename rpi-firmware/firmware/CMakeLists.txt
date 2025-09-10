@@ -46,7 +46,7 @@ target_include_directories(firmware PRIVATE "src/libimpl/"
 )
 target_link_libraries(firmware # user libs
     pico_stdlib pico_multicore pico_cyw43_arch_none
-    hardware_adc hardware_dma hardware_pwm hardware_pio hardware_clocks
+    hardware_adc hardware_dma hardware_pwm hardware_pio hardware_clocks hardware_gpio
     # pico_btstack_ble pico_btstack_cyw43
     pico_unique_id pico_stdio_usb tinyusb_device tinyusb_board
 )

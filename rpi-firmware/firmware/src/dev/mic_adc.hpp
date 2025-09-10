@@ -6,21 +6,22 @@
 #include <tusb.h>
 
 // For reading from a mono-channel microphone.
-// Uses 2 DMAs in a ring formation to collect samples (same as i2s),
-// then processes the samples in chunks when the usb requests the data.
+// Uses 2 DMAs in an alternating "ping pong" formation to collect samples (same as speaker),
+// then flushes out completed buffers to the USB.
 // Uses DMA IRQ 1
+// NOTE: Remember to ground the mic and the RPI together on the same rail (else adc converts static).
 // -------------------------------------------
 
 namespace dev::mic{
     namespace cfg{
         constexpr u32 ADC_PIN = 2;
         constexpr u32 SAMPLE_RATE = 48'000; // ehhh - rather be slower but its ok.
-        constexpr f64 ADC_LEVEL_SHIFT = 1.5; // Volts
+        constexpr f64 ADC_LEVEL_SHIFT = 2.0; // Volts
         // These are helper constants
         constexpr u32 ADC_PRECISION = 12; // bit depth
         constexpr f64 ADC_VREF = 3.3;
         constexpr f64 ADC_DELTA = ADC_VREF / ((1 << ADC_PRECISION) - 1);
-        constexpr u16 ADC_LEVEL_SHIFT_COUNT = (ADC_LEVEL_SHIFT / ADC_DELTA) * (1 << (16 - ADC_PRECISION));
+        constexpr u16 ADC_LEVEL_SHIFT_COUNT = (ADC_LEVEL_SHIFT / ADC_DELTA);
     }
 
     using USBAudioSample16 = s16;
@@ -86,8 +87,12 @@ namespace dev::mic{
     }
 
     // Add to the USB audio outgoing buffer
-    inline void offload_samples(ADCInBufHalf const& from){
-        auto bytesWritten = tud_audio_write((uint8_t*)from.begin(), sizeof(from));
+    inline void offload_samples(ADCInBufHalf& from){
+        // Apply the reverse-dc offset
+        for(auto& s: from){
+            s = ((s16)s - cfg::ADC_LEVEL_SHIFT_COUNT); // will be reinterpreted as signed
+        }
+        auto bytesWritten = tud_audio_write((u8*)from.begin(), sizeof(from));
     }
 
     inline void dma_handle_channel(DMAChannel ch, ADCInBufHalf& buf, bool& full){

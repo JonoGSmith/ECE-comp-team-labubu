@@ -3,6 +3,7 @@
   - 1 analog pin (`mic_adc`)
   - 1 digital pin (neck `servo` pwm)
   - 3 digital pins (`i2s_dac`)
+  - 1 digital pin (`push_button`)
 
 - DMA: 12 available
   - 2 channel (`mic_adc` adc -> bufferA, adc -> bufferB)

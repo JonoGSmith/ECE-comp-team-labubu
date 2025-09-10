@@ -11,6 +11,7 @@
 #include "dev/servo_pwm.hpp"
 #include "dev/usb.hpp"
 #include "dev/i2s_dac.hpp"
+#include "dev/push_button.hpp"
 #include "console.hpp"
 
 void set_obled(bool on){
@@ -25,6 +26,7 @@ void init(){
         dev::usb::tick();
     }
 
+    dev::btn::init();
     dev::servo::init();
     dev::mic::init();
     dev::dac::init();
@@ -52,6 +54,7 @@ int main(){
     while(true){
         auto now = get_absolute_time();
         dev::usb::tick();
+        dev::btn::report_changes();
 
         // Sleeping is now illegal.
         if(absolute_time_diff_us(now, once_per_second) <= 0){
