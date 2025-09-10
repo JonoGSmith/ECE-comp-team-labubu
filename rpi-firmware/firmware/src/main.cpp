@@ -32,19 +32,17 @@ void init(){
     dev::dac::init();
 
     if(cyw43_arch_init()){ // Initialise the Wi-Fi chip
-        printf("Wi-Fi init failed\n");
+        console::println("Wi-Fi init failed");
     }
     set_obled(true); // Turn on the Pico W LED as proof of life.
 }
-
-decltype(dev::dac::gAudioRecvBuffer.ring) copy;
 
 int main(){
     bool light_toggle = true;
     init();
 
     // printf("Hello, world! Playing %d samples.\n", gTestAudioSize / sizeof(u16));
-    printf("WARNING! Use the headphone jack at your own risk. It can destroy your ears!\n");
+    console::println("WARNING! Use the headphone jack at your own risk. It can destroy your ears!");
     dev::dac::start();
     dev::mic::start();
 
@@ -62,7 +60,7 @@ int main(){
             light_toggle = !light_toggle;
 
             if(console::gPrintDebugInfo){
-                printf("DMAcnt: spk %d, mic %d\n", dev::dac::isDMA, dev::mic::gDMACount);
+                console::println("DMAcnt: spk %d, mic %d\n", dev::dac::isDMA, dev::mic::gDMACount);
             }
             dev::dac::isDMA = 0;
             dev::mic::gDMACount = 0;

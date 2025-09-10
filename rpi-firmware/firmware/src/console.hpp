@@ -1,5 +1,6 @@
 #pragma once
 #include "common.hpp"
+#include "system.hpp"
 #include <charconv>
 #include <system_error>
 #include "dev/servo_pwm.hpp"
@@ -7,11 +8,35 @@
 namespace console{
     inline bool gPrintDebugInfo = false;
 
+    template<size_t N>
+    constexpr auto print(StringLitC<N> fmt, auto ref... params){
+        auto ptr = &fmt[0];
+        printf(fmt, params...);
+    }
+
+    template<size_t N> constexpr auto println(StringLitC<N> fmt, auto ref... params){
+        printf(fmt, params...);
+        printf("\n");
+    }
+
+    constexpr auto dbg(auto ref... params){
+        if(gPrintDebugInfo){
+            print("DBG: ");
+            print(params...);
+        }
+    }
+    constexpr auto dbgln(auto ref... params){
+        if(gPrintDebugInfo){
+            dbg(params...);
+            printf("\n");
+        }
+    }
+
     // Process a console command.
     inline void processline(sv str){
         constexpr sv cmdServo = "servo";
         if(str.starts_with("help")){
-            printf(
+            println(
 R"(>>> ECE Competition Control Panel ver.R1
 Credits:
 - Leon, Michelle: Hardware leads.
@@ -25,6 +50,9 @@ Commands (submit a command by sending a '\n' newline):
     servo <angle>   : Adjust the servo angle. `angle: decimal` ranged -90..=90
                       E.g.: `servo -15.2`
     areyouthepico?  : Replies `yes`
+Messages the device will send:
+    "Button 0: pressed" (or released)
+    "DBG: debug message log"
 )");
         }else if(str.starts_with(cmdServo)){
             f32 r;
@@ -32,19 +60,19 @@ Commands (submit a command by sending a '\n' newline):
             auto ok = (res.ec == std::errc());
             if(ok){
                 auto x = clamp(-90.f, r, 90.f);
-                if(x != r){ printf("Clamped range\n"); }
+                if(x != r){ println("Clamped range"); }
                 dev::servo::set_rotation_angle(x);
             }else{
-                printf("Invalid argument to `servo`\n");
+                println("Invalid argument to `servo`");
             }
         }else if(str == "debug off"){
             gPrintDebugInfo = false;
         }else if(str == "debug on"){
             gPrintDebugInfo = true;
         }else if(str == "areyouthepico?"){
-            printf("yes\n");
+            println("yes");
         }else{
-            printf("Unrecognised command. Type `help` for more info.\n");
+            println("Unrecognised command. Type `help` for more info.");
         }
     }
 }

@@ -13,8 +13,6 @@
 
 #include "tusb.h"
 
-#define DEBUG printf
-
 // --------------------------------------
 // General USB behaviours
 // --------------------------------------
@@ -95,15 +93,15 @@ static bool audio_feature_unit_set_request(uint8_t rhport, audio_control_request
     if (request->bControlSelector == AUDIO_FU_CTRL_MUTE) {
         TU_VERIFY(request->wLength == sizeof(audio_control_cur_1_t));
         muteCtrls[request->bChannelNumber] = ((audio_control_cur_1_t const *) buf)->bCur;
-        DEBUG("Set channel %d Mute: %d\r\n", request->bChannelNumber, muteCtrls[request->bChannelNumber]);
+        console::dbgln("Set channel %d Mute: %d", request->bChannelNumber, muteCtrls[request->bChannelNumber]);
         return true;
     } else if (request->bControlSelector == AUDIO_FU_CTRL_VOLUME) {
         TU_VERIFY(request->wLength == sizeof(audio_control_cur_2_t));
         volumeCtrls[request->bChannelNumber] = ((audio_control_cur_2_t const *) buf)->bCur;
-        DEBUG("Set channel %d volume: %d dB\r\n", request->bChannelNumber, volumeCtrls[request->bChannelNumber] / 256);
+        console::dbgln("Set channel %d volume: %d dB", request->bChannelNumber, volumeCtrls[request->bChannelNumber] / 256);
         return true;
     } else {
-        DEBUG("Feature unit set request not supported, entity = %u, selector = %u, request = %u\r\n",
+        console::dbgln("Feature unit set request not supported, entity = %u, selector = %u, request = %u",
                 request->bEntityID, request->bControlSelector, request->bRequest);
         return false;
     }
@@ -118,10 +116,10 @@ static bool audio_clock_set_request(uint8_t rhport, audio_control_request_t cons
     if (request->bControlSelector == AUDIO_CS_CTRL_SAM_FREQ) {
         TU_VERIFY(request->wLength == sizeof(audio_control_cur_4_t));
         current_sample_rate = (uint32_t) ((audio_control_cur_4_t const *) buf)->bCur;
-        DEBUG("Clock set current freq: %" PRIu32 "\r\n", current_sample_rate);
+        console::dbgln("Clock set current freq: %" PRIu32 "", current_sample_rate);
         return true;
     } else {
-        DEBUG("Clock set request not supported, entity = %u, selector = %u, request = %u\r\n",
+        console::dbgln("Clock set request not supported, entity = %u, selector = %u, request = %u",
                 request->bEntityID, request->bControlSelector, request->bRequest);
         return false;
     }
@@ -133,28 +131,28 @@ static bool audio_clock_get_request(uint8_t rhport, audio_control_request_t cons
 
     if (request->bControlSelector == AUDIO_CS_CTRL_SAM_FREQ) {
         if (request->bRequest == AUDIO_CS_REQ_CUR) {
-            DEBUG("Clock get current freq %" PRIu32 "\r\n", current_sample_rate);
+            console::dbgln("Clock get current freq %" PRIu32 "", current_sample_rate);
 
             audio_control_cur_4_t curf = {(int32_t) tu_htole32(current_sample_rate)};
             return tud_audio_buffer_and_schedule_control_xfer(rhport, (tusb_control_request_t const *) request, &curf, sizeof(curf));
         } else if (request->bRequest == AUDIO_CS_REQ_RANGE) {
             audio_control_range_4_n_t(sample_rates.size()) rangef = {.wNumSubRanges = tu_htole16(sample_rates.size())};
-            DEBUG("Clock get %d freq ranges\r\n", sample_rates.size());
+            console::dbgln("Clock get %d freq ranges", sample_rates.size());
             for (uint8_t i = 0; i < sample_rates.size(); i++) {
                 rangef.subrange[i].bMin = (int32_t) sample_rates[i];
                 rangef.subrange[i].bMax = (int32_t) sample_rates[i];
                 rangef.subrange[i].bRes = 0;
-                DEBUG("Range %d (%d, %d, %d)\r\n", i, (int) rangef.subrange[i].bMin, (int) rangef.subrange[i].bMax, (int) rangef.subrange[i].bRes);
+                console::dbgln("Range %d (%d, %d, %d)", i, (int) rangef.subrange[i].bMin, (int) rangef.subrange[i].bMax, (int) rangef.subrange[i].bRes);
             }
 
             return tud_audio_buffer_and_schedule_control_xfer(rhport, (tusb_control_request_t const *) request, &rangef, sizeof(rangef));
         }
     } else if (request->bControlSelector == AUDIO_CS_CTRL_CLK_VALID && request->bRequest == AUDIO_CS_REQ_CUR) {
         audio_control_cur_1_t cur_valid = {.bCur = 1};
-        DEBUG("Clock get is valid %u\r\n", cur_valid.bCur);
+        console::dbgln("Clock get is valid %u", cur_valid.bCur);
         return tud_audio_buffer_and_schedule_control_xfer(rhport, (tusb_control_request_t const *) request, &cur_valid, sizeof(cur_valid));
     }
-    DEBUG("Clock get request not supported, entity = %u, selector = %u, request = %u\r\n",
+    console::dbgln("Clock get request not supported, entity = %u, selector = %u, request = %u",
             request->bEntityID, request->bControlSelector, request->bRequest);
     return false;
 }
@@ -165,23 +163,23 @@ static bool audio_feature_unit_get_request(uint8_t rhport, audio_control_request
 
     if (request->bControlSelector == AUDIO_FU_CTRL_MUTE && request->bRequest == AUDIO_CS_REQ_CUR) {
         audio_control_cur_1_t mute1 = {.bCur = muteCtrls[request->bChannelNumber]};
-        DEBUG("Get channel %u mute %d\r\n", request->bChannelNumber, mute1.bCur);
+        console::dbgln("Get channel %u mute %d", request->bChannelNumber, mute1.bCur);
         return tud_audio_buffer_and_schedule_control_xfer(rhport, (tusb_control_request_t const *) request, &mute1, sizeof(mute1));
     } else if (request->bControlSelector == AUDIO_FU_CTRL_VOLUME) {
         if (request->bRequest == AUDIO_CS_REQ_RANGE) {
             audio_control_range_2_n_t(1) range_vol = {
                 .wNumSubRanges = tu_htole16(1),
                 .subrange = {{.bMin = tu_htole16(-VOLUME_CTRL_50_DB), .bMax = tu_htole16(VOLUME_CTRL_0_DB), .bRes = tu_htole16(256)}}};
-            DEBUG("Get channel %u volume range (%d, %d, %u) dB\r\n", request->bChannelNumber,
+            console::dbgln("Get channel %u volume range (%d, %d, %u) dB", request->bChannelNumber,
                     range_vol.subrange[0].bMin / 256, range_vol.subrange[0].bMax / 256, range_vol.subrange[0].bRes / 256);
             return tud_audio_buffer_and_schedule_control_xfer(rhport, (tusb_control_request_t const *) request, &range_vol, sizeof(range_vol));
         } else if (request->bRequest == AUDIO_CS_REQ_CUR) {
             audio_control_cur_2_t cur_vol = {.bCur = tu_htole16(volumeCtrls[request->bChannelNumber])};
-            DEBUG("Get channel %u volume %d dB\r\n", request->bChannelNumber, cur_vol.bCur / 256);
+            console::dbgln("Get channel %u volume %d dB", request->bChannelNumber, cur_vol.bCur / 256);
             return tud_audio_buffer_and_schedule_control_xfer(rhport, (tusb_control_request_t const *) request, &cur_vol, sizeof(cur_vol));
         }
     }
-    DEBUG("Feature unit get request not supported, entity = %u, selector = %u, request = %u\r\n",
+    console::dbgln("Feature unit get request not supported, entity = %u, selector = %u, request = %u",
             request->bEntityID, request->bControlSelector, request->bRequest);
 
     return false;
@@ -200,7 +198,7 @@ bool tud_audio_set_req_entity_cb(uint8_t rhport, tusb_control_request_t const *p
     if (request->bEntityID == TERMID_CLK)
         return audio_clock_set_request(rhport, request, buf);
 
-    DEBUG("Set request not handled, entity = %d, selector = %d, request = %d\r\n",
+    console::dbgln("Set request not handled, entity = %d, selector = %d, request = %d",
           request->bEntityID, request->bControlSelector, request->bRequest);
     return false;
 }
@@ -214,7 +212,7 @@ bool tud_audio_get_req_entity_cb(uint8_t rhport, tusb_control_request_t const *p
     if (request->bEntityID == TERMID_SPK_FEAT)
         return audio_feature_unit_get_request(rhport, request);
 
-    DEBUG("Get request not handled, entity = %d, selector = %d, request = %d\r\n",
+    console::dbgln("Get request not handled, entity = %d, selector = %d, request = %d",
             request->bEntityID, request->bControlSelector, request->bRequest);
     return false;
 }

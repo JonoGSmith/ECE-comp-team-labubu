@@ -1,4 +1,5 @@
 #include "../common.hpp"
+#include "../console.hpp"
 #include "pico/stdlib.h"
 
 // Simple GPIO button
@@ -22,9 +23,9 @@ namespace dev::btn{
         static bool gButtonPressed = false;
         auto active = poll();
         if(active && !gButtonPressed){
-            printf("Button 0: pressed\n");
+            console::println("Button 0: pressed");
         }else if(!active && gButtonPressed){
-            printf("Button 0: released\n");
+            console::println("Button 0: released");
         }
         gButtonPressed = active;
     }

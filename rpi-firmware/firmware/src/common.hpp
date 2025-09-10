@@ -14,6 +14,7 @@ using s32 = std::int32_t;
 using s64 = std::int64_t;
 using f32 = float;
 using f64 = double;
+using size_t = std::size_t;
 
 // Macro helpers
 #define usingT template<typename... T> using
@@ -46,14 +47,18 @@ using string = std::string;
 #include <vector>
 usingT vec = std::vector<T...>;
 
+// Promote ergonomic usage of reference-to-const (immutable reference)
+#define ref const&
+
 // Deducing this (C++23)
-#define self self                                // Intellisense highlighting
-#define Self std::remove_cvref_t<decltype(self)> // Base type of current class (only usable in a self-deduced context)
+#define self self // Does nothing. For intellisense highlighting
+#define Self std::remove_cvref_t<decltype(self)> // Type of current object (only usable in a self-deduced context)
 #define SelfMut this auto& self                  // `self` declaration - reference (mutable ref)
-#define SelfRef this auto const& self            // `self` declaration - const ref (immutable ref)
+#define SelfRef this auto ref self               // `self` declaration - const ref (immutable ref)
 #define SelfFwd this auto&& self                 // `self` declaration - temporary (forwarding)
 
 // Defer functionality:
+// Usage: `defer { /*code to run at end of scope*/ };`
 template<typename F>
 struct DeferHandle{
     F func;
@@ -66,24 +71,25 @@ struct DeferBuilder{
 #define defer_block DeferBuilder{} ->* [&]noexcept  // Syntax abuse to remove the user needing to write the capture notation
 #define defer auto ANONYMOUS_VARIABLE = defer_block
 
+// String literal ergonomics
+template <size_t N> using StringLitC = const char (&)[N]; // Includes terminator
+template<typename CharT, CharT... Cs> consteval auto operator""_arr() {
+    return std::array<CharT, sizeof...(Cs)>{ Cs... };
+}
+
 // Utilities
 #include <algorithm>
 #include <utility>
 
 // Clamps in range (inclusive)
 template<typename T>
-constexpr T clamp(const T& low, const T& val, const T& high) {
+constexpr T clamp(T ref low, T ref val, T ref high) {
     return std::min(std::max(val, low), high);
 }
 
-// Nicer reinterpret
+// Reinterpretation helpers (avoids explicit mention of the type name if it can be deduced)
 template<class To> constexpr To ptr_cast(auto* p){ return reinterpret_cast<To>(p); }
-
-template<class T> constexpr auto ptr_to_const(T const& target) -> T const* { return &target; }
-
-template <typename CharT, CharT... Cs> consteval auto operator""_arr() {
-    return std::array<CharT, sizeof...(Cs)>{ Cs... };
-}
+template<class T> constexpr auto ptr_to_const(T ref target) -> T const* { return &target; }
 
 // External libraries
 #define INCBIN_PREFIX // none
