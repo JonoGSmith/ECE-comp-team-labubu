@@ -78,8 +78,8 @@ enum VOLUME_CTRL {
     VOLUME_CTRL_SILENCE = 0x8000,
 };
 
-static array<bool, 1+AUD_SPK_CHANNELS> muteCtrls = {}; // 0: Master, 1: First channel (mono)
-static array<s16, 1+AUD_SPK_CHANNELS> volumeCtrls = {};
+static array<bool, 1+AUD_SPK_CHANNELS + 1> muteCtrls = {}; // 0: Master, 1: First channel (mono), 2: Second apparently. It shouldn't exist but windows is writing to it.
+static array<s16, 1+AUD_SPK_CHANNELS + 1> volumeCtrls = {};
 
 // List of supported sample rates
 constexpr auto sample_rates = std::to_array<u32>({48000});
