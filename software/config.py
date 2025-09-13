@@ -38,5 +38,5 @@ GEMINI_TEMPERATURE = float(os.getenv("GEMINI_TEMPERATURE", "0.2"))
 
 # ===== ElevenLabs (TTS) =====
 ELEVEN_API_KEY = os.getenv("ELEVENLABS_API_KEY", "sk_e09d9a2d41d287d882ff7330be94e068c7a86e6a1e751e86")
-VOICE_ID       = os.getenv("ELEVEN_VOICE_ID", "piI8Kku0DcvcL6TTSeQt")
+VOICE_ID       = os.getenv("ELEVEN_VOICE_ID", "2h7ex7B1yGrkcLFI8zUO")
 EL_MODEL_ID    = os.getenv("ELEVEN_MODEL_ID", "eleven_flash_v2_5")
