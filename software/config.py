@@ -15,9 +15,9 @@ SMART_FORMAT = True
 OUTPUT_FILE   = "transcripts.txt"
 OUTPUT_DIR    = "tts_outputs"
 SHOW_PARTIALS = True
-VERBOSE       = False
+VERBOSE       = True
 
-# ===== WebSocket keepalive =====                      
+# ===== WebSocket keepalive =====
 WS_PING_INTERVAL = 20
 WS_PING_TIMEOUT  = None
 WS_MAX_SIZE      = 10_000_000

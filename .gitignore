@@ -6,3 +6,6 @@ build/
 ._*
 
 .env
+
+__pycache__/
+transcripts.txt

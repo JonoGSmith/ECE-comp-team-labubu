@@ -11,6 +11,7 @@ from stt import (
 )
 from llm import gemini_reply
 from tts import tts_streaming_ws
+import com
 
 
 # ============================================================
@@ -261,6 +262,8 @@ async def stt_run_forever():
 # =======================
 async def main():
     global FLUSH_REQUEST
+    com.try_attach()
+
     di, info = choose_device()
     src = int(info.get("default_samplerate") or 48000)
     src = src if src >= 8000 else 16000
