@@ -33,10 +33,10 @@ VK_RETURN = 0x0D
 # ===== Gemini (LLM) =====
 GEMINI_API_KEY     = os.getenv("GEMINI_API_KEY", "AIzaSyDe41I7PVDP9la9FCAzTrOJXXVnKn5Qy1M")
 GEMINI_MODEL       = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-GEMINI_MAX_TOKENS  = int(os.getenv("GEMINI_MAX_TOKENS", "16"))
+GEMINI_MAX_TOKENS  = int(os.getenv("GEMINI_MAX_TOKENS", "32"))
 GEMINI_TEMPERATURE = float(os.getenv("GEMINI_TEMPERATURE", "0.2"))
 
 # ===== ElevenLabs (TTS) =====
-ELEVEN_API_KEY = os.getenv("ELEVENLABS_API_KEY", "d7e95a76f6267dc47258cb382f0f736d34216286c1d8414e437ca5ab10a0acfc")
-VOICE_ID       = os.getenv("ELEVEN_VOICE_ID", "nPczCjzI2devNBz1zQrb")
+ELEVEN_API_KEY = os.getenv("ELEVENLABS_API_KEY", "sk_e09d9a2d41d287d882ff7330be94e068c7a86e6a1e751e86")
+VOICE_ID       = os.getenv("ELEVEN_VOICE_ID", "piI8Kku0DcvcL6TTSeQt")
 EL_MODEL_ID    = os.getenv("ELEVEN_MODEL_ID", "eleven_flash_v2_5")

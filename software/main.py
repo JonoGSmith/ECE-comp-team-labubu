@@ -1,5 +1,5 @@
 # main.py
-import os, sys, json, asyncio, queue, threading, ctypes, datetime, time, contextlib
+import os, sys, json, asyncio, queue, threading, ctypes, datetime, time, contextlib, platform
 import sounddevice as sd
 
 from config import (
@@ -14,19 +14,49 @@ from tts import tts_streaming_ws
 
 
 # ============================================================
-# Single-key "hold-to-talk" control (SPACE only), Windows focus
+# Single-key "hold-to-talk" control (SPACE only), cross-platform
 # ============================================================
 
-# Robust GetAsyncKeyState setup (prevents flakiness with default ctypes)
-_user32 = ctypes.WinDLL("user32", use_last_error=True)
-_user32.GetAsyncKeyState.argtypes = (ctypes.c_int,)
-_user32.GetAsyncKeyState.restype  = ctypes.c_short
+PYNPUT_LISTENER = None   # only used on macOS/Linux
+SPACE_HELD = False       # shared flag for non-Windows
 
-VK_SPACE = 0x20  # space
+if platform.system() == "Windows":
+    # Windows: use GetAsyncKeyState
+    _user32 = ctypes.WinDLL("user32", use_last_error=True)
+    _user32.GetAsyncKeyState.argtypes = (ctypes.c_int,)
+    _user32.GetAsyncKeyState.restype  = ctypes.c_short
 
-def _space_down() -> bool:
-    # High-order bit set means currently down
-    return (_user32.GetAsyncKeyState(VK_SPACE) & 0x8000) != 0
+    VK_SPACE = 0x20  # space
+
+    def _space_down() -> bool:
+        return (_user32.GetAsyncKeyState(VK_SPACE) & 0x8000) != 0
+
+else:
+    # macOS / Linux: use pynput global listener
+    try:
+        from pynput import keyboard
+    except Exception as e:
+        raise RuntimeError(
+            "pynput is required on macOS/Linux for spacebar detection. "
+            "Install with: pip install pynput"
+        ) from e
+
+    def _on_press(key):
+        global SPACE_HELD
+        if key == keyboard.Key.space:
+            SPACE_HELD = True
+
+    def _on_release(key):
+        global SPACE_HELD
+        if key == keyboard.Key.space:
+            SPACE_HELD = False
+
+    PYNPUT_LISTENER = keyboard.Listener(on_press=_on_press, on_release=_on_release)
+    PYNPUT_LISTENER.daemon = True
+    PYNPUT_LISTENER.start()
+
+    def _space_down() -> bool:
+        return SPACE_HELD
 
 
 # =======================
@@ -34,21 +64,19 @@ def _space_down() -> bool:
 # =======================
 AUDIO_Q: "queue.Queue[bytes]" = queue.Queue()
 
-# Mirror the original single-file semantics exactly:
 SENDING_AUDIO = threading.Event()
 COLLECTING    = threading.Event()
 SHOULD_STOP   = threading.Event()
 
 SESSION_BUFFER: list[str] = []
-SESSION_LOCK = threading.Lock()   # protects SESSION_BUFFER for keyloop/producer
-ASYNC_LOCK   = asyncio.Lock()     # used by async consumer when appending lines
+SESSION_LOCK = threading.Lock()
+ASYNC_LOCK   = asyncio.Lock()
 
 FLUSH_REQUEST: "asyncio.Event|None" = None
 
 JOB_Q: "asyncio.Queue[tuple[str, datetime.datetime]]" = asyncio.Queue()
 N_WORKERS = int(os.getenv("N_WORKERS", "1"))
 
-# Control/notifications from worker → keyloop
 CTRL_Q: "asyncio.Queue[str]" = asyncio.Queue()   # values: "tts_done"
 
 def _append(path: str, text: str):
@@ -57,10 +85,7 @@ def _append(path: str, text: str):
 
 
 async def finalize_session():
-    """
-    Stop sending, flush finals quickly, snapshot buffer, enqueue job; return immediately.
-    Leaves the app in idle, ready for the next SPACE press (after TTS done).
-    """
+    """Stop sending, flush finals, snapshot buffer, enqueue job."""
     SENDING_AUDIO.clear()
     if FLUSH_REQUEST:
         FLUSH_REQUEST.set()
@@ -78,21 +103,15 @@ async def finalize_session():
 
 
 # =======================
-# Spacebar-only keyloop with robust reset-after-TTS
+# Spacebar-only keyloop
 # =======================
 async def keyloop():
-    """
-    ONLY spacebar has functionality:
-      - HOLD SPACE     -> start recording (after a tiny debounce)
-      - RELEASE SPACE  -> finalize & send (Gemini → TTS)
-    After TTS finishes, we *require* seeing space released before allowing a new start.
-    """
     was_down = False
     press_ts_ms = 0.0
 
     PRESS_DEBOUNCE_MS   = 50.0
     RELEASE_DEBOUNCE_MS = 30.0
-    POLL_INTERVAL_S     = 0.01  # 10 ms
+    POLL_INTERVAL_S     = 0.01
 
     waiting_tts_done = False
     waiting_space_up_after_tts = False
@@ -103,13 +122,11 @@ async def keyloop():
         print("[ready]")
 
     while not SHOULD_STOP.is_set():
-        # Non-blocking: drain CTRL messages first
         try:
             while True:
                 msg = CTRL_Q.get_nowait()
                 if msg == "tts_done":
                     waiting_tts_done = False
-                    # Require fresh space-UP before next arm
                     waiting_space_up_after_tts = True
                     space_up_confirm_ms = 0.0
                     if VERBOSE:
@@ -128,11 +145,9 @@ async def keyloop():
             else:
                 space_up_confirm_ms = 0.0
 
-        # Edge: SPACE just pressed
         if now_down and not was_down:
             press_ts_ms = time.monotonic() * 1000.0
 
-        # Start recording
         if (not waiting_tts_done) and (not waiting_space_up_after_tts) and now_down and not COLLECTING.is_set():
             if (time.monotonic() * 1000.0 - press_ts_ms) >= PRESS_DEBOUNCE_MS:
                 with SESSION_LOCK:
@@ -142,7 +157,6 @@ async def keyloop():
                 if VERBOSE:
                     print("\n[rec] START")
 
-        # Edge: SPACE released → finalize
         if (not now_down) and was_down:
             await asyncio.sleep(RELEASE_DEBOUNCE_MS / 1000.0)
             if COLLECTING.is_set():
@@ -150,7 +164,7 @@ async def keyloop():
                     print("\n[rec] STOP")
                 await finalize_session()
                 COLLECTING.clear()
-                waiting_tts_done = True  # block new starts until playback completes
+                waiting_tts_done = True
 
         was_down = now_down
         await asyncio.sleep(POLL_INTERVAL_S)
@@ -160,10 +174,6 @@ async def keyloop():
 # Worker: LLM + TTS
 # =======================
 async def process_job_worker(worker_id: int):
-    """
-    Consumes (user_text, ts) jobs; writes file, calls Gemini, then realtime TTS.
-    Notifies keyloop with 'tts_done' when audio completes so the UI resets cleanly.
-    """
     while not SHOULD_STOP.is_set():
         try:
             user_text, ts = await JOB_Q.get()
@@ -173,7 +183,6 @@ async def process_job_worker(worker_id: int):
             header_user = f"\n--- Session @ {ts:%Y-%m-%d %H:%M:%S} ---\n{user_text}\n"
             await asyncio.to_thread(_append, OUTPUT_FILE, header_user)
 
-            # Gemini
             try:
                 reply = await asyncio.to_thread(gemini_reply, user_text)
             except Exception as e:
@@ -181,11 +190,9 @@ async def process_job_worker(worker_id: int):
                 await CTRL_Q.put("tts_done")
                 continue
 
-            # Write reply while TTS happens
             header_reply = f"--- Gemini reply @ {ts:%Y-%m-%d %H:%M:%S} ---\n{reply}\n"
             write_reply = asyncio.create_task(asyncio.to_thread(_append, OUTPUT_FILE, header_reply))
 
-            # Realtime TTS
             try:
                 saved = await tts_streaming_ws(reply, save_wav=False)
                 if saved:
@@ -197,23 +204,18 @@ async def process_job_worker(worker_id: int):
 
             await write_reply
         finally:
-            # Always notify that playback phase is complete so keyloop can re-arm.
             await CTRL_Q.put("tts_done")
             JOB_Q.task_done()
 
 
 # =======================
-# STT connection watchdog (auto-reconnect)
+# STT connection watchdog
 # =======================
 async def stt_run_forever():
-    """
-    Maintains a persistent Deepgram WS connection.
-    If it drops (idle timeout, network blip), we reconnect with backoff.
-    """
     url  = deepgram_url()
     hdrs = {"Authorization": f"Token {DG_API_KEY}", "Content-Type": "application/octet-stream"}
 
-    backoff_seq = [2, 5, 10]  # seconds
+    backoff_seq = [2, 5, 10]
     attempt = 0
 
     while not SHOULD_STOP.is_set():
@@ -222,23 +224,19 @@ async def stt_run_forever():
                 if VERBOSE:
                     print("[stt] connected")
 
-                # Spawn producer/consumer bound to this ws
                 prod = asyncio.create_task(producer(ws, AUDIO_Q, SENDING_AUDIO, FLUSH_REQUEST, SHOULD_STOP))
                 cons = asyncio.create_task(consumer(ws, COLLECTING, SESSION_BUFFER, ASYNC_LOCK))
 
-                # Run until either side ends (ws close or error)
                 done, pending = await asyncio.wait(
                     {prod, cons},
                     return_when=asyncio.FIRST_COMPLETED
                 )
 
-                # If we get here, connection ended – cancel the other task
                 for t in pending:
                     t.cancel()
                     with contextlib.suppress(asyncio.CancelledError):
                         await t
 
-                # Drain & report errors if any
                 for t in done:
                     exc = t.exception()
                     if exc and VERBOSE:
@@ -251,7 +249,6 @@ async def stt_run_forever():
         if SHOULD_STOP.is_set():
             break
 
-        # Backoff before reconnect
         delay = backoff_seq[min(attempt, len(backoff_seq) - 1)]
         if VERBOSE:
             print(f"[stt] reconnecting in {delay}s …")
@@ -273,14 +270,12 @@ async def main():
     print(f"[tts  ] {os.path.abspath(OUTPUT_DIR)}")
     print("[keys ] HOLD SPACE to record; RELEASE to finalize & send. (Ctrl+C to quit)")
 
-    # Persistent Chunker; it checks SENDING_AUDIO internally (like your single-file)
     chunker = Chunker(src, AUDIO_Q, sending_event=SENDING_AUDIO)
 
     def audio_cb(indata, frames, time_info, status):
         if status and VERBOSE:
             print(f"[audio]{status}", file=sys.stderr)
         try:
-            # Copy because sounddevice may reuse the buffer
             chunker.process(indata.copy())
         except Exception as e:
             if VERBOSE:
@@ -298,13 +293,11 @@ async def main():
     key_task = asyncio.create_task(keyloop())
 
     with stream:
-        # Run until keyloop ends (Ctrl+C) or an unhandled exception bubbles up
         await key_task
         SHOULD_STOP.set()
         SENDING_AUDIO.clear()
         COLLECTING.clear()
 
-        # shut down STT task
         stt_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await stt_task
@@ -315,6 +308,14 @@ async def main():
             w.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await w
+
+    # Clean up pynput listener if used
+    if PYNPUT_LISTENER is not None:
+        try:
+            PYNPUT_LISTENER.stop()
+        except Exception:
+            pass
+
 
 if __name__ == "__main__":
     try:
