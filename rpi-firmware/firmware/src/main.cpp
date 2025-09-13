@@ -58,9 +58,9 @@ int main(){
             set_obled(light_toggle);
             light_toggle = !light_toggle;
 
-            if(console::gPrintDebugInfo){
-                console::println("DMAcnt: spk %d, mic %d\n", dev::dac::isDMA, dev::mic::gDMACount);
-            }
+            // if(console::gPrintDebugInfo){
+            //     console::println("DMAcnt: spk %d, mic %d", dev::dac::isDMA, dev::mic::gDMACount);
+            // }
             dev::dac::isDMA = 0;
             dev::mic::gDMACount = 0;
             once_per_second = delayed_by_ms(now, 1000);

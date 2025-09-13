@@ -21,13 +21,6 @@ namespace dev::dac{
             s32 l;
             s32 r;
         };
-
-        static constexpr auto make(s16 s){
-            return I2SAudioSample{.c = {s << 16, s << 16}};
-        }
-        static constexpr auto make_quiet(s16 s){
-            return I2SAudioSample{.c = {s << 11, s << 11}};
-        }
     };
 
     constexpr u32 cI2SSampleRate = 48'000;

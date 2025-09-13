@@ -1,6 +1,7 @@
 #pragma once
 #include "../common.hpp"
 #include "i2s_protocol.hpp"
+#include "usb_handlers.hpp"
 
 #include <hardware/dma.h>
 
@@ -18,8 +19,9 @@ namespace dev::dac{
             auto word = gAudioRecvBuffer.read_one();
             // s16 sword = word;
             s32 sample = word;
-            into[w] = I2SAudioSample{.l = sample * (1 << 12), .r = sample * (1 << 12)};
-            // The maximum shift is (1 << 16). Each shift is +3dB.
+            s32 scaled = sample * volumeFactor;
+            into[w] = I2SAudioSample{.l = scaled, .r = scaled};
+            // Default volume was 1 << 12 (4096), max is 65535
             w += 1;
         }
         // Run out of audio. This supresses garbage but indicates not enough data.
