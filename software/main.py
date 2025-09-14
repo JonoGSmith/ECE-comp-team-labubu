@@ -7,11 +7,10 @@ from config import (
 )
 from stt import (
     choose_device, Chunker, deepgram_url, ws_connect,
-    consumer, wait_for_finals
+    producer, consumer, wait_for_finals
 )
 from llm import gemini_reply
 from tts import tts_streaming_ws
-import com
 
 
 # ============================================================
@@ -80,7 +79,6 @@ N_WORKERS = int(os.getenv("N_WORKERS", "1"))
 
 CTRL_Q: "asyncio.Queue[str]" = asyncio.Queue()   # values: "tts_done"
 
-
 def _append(path: str, text: str):
     with open(path, "a", encoding="utf-8") as f:
         f.write(text)
@@ -88,10 +86,10 @@ def _append(path: str, text: str):
 
 async def finalize_session():
     """Stop sending, flush finals, snapshot buffer, enqueue job."""
-    SENDING_AUDIO.clear()              # stop feeding audio to queue
+    SENDING_AUDIO.clear()
     if FLUSH_REQUEST:
-        FLUSH_REQUEST.set()            # ask STT to finalize
-    await wait_for_finals()            # wait a short idle window for last finals
+        FLUSH_REQUEST.set()
+    await wait_for_finals()
 
     with SESSION_LOCK:
         if not SESSION_BUFFER:
@@ -105,117 +103,9 @@ async def finalize_session():
 
 
 # =======================
-# Catch-up producer (prebuffer then flush fast)
+# Spacebar-only keyloop
 # =======================
-async def producer_with_catchup(ws,
-                                audio_q: "queue.Queue[bytes]",
-                                sending_evt: "threading.Event",
-                                flush_evt: "asyncio.Event|None",
-                                should_stop: "threading.Event"):
-    """
-    Same as stt.producer, but supports prebuffer:
-      - If there's backlog in audio_q, send frames without pacing until low watermark.
-      - When backlog is small, pace normally (like 0.8 * CHUNK_MS).
-    """
-    step = int(TARGET_SR * (CHUNK_MS / 1000.0)) * 2
-    HIGH_WATER = 12   # ~12 * 40ms = ~0.5s buffered (tune as needed)
-    LOW_WATER  = 4
-
-    catchup = False
-    while not should_stop.is_set():
-        if flush_evt and flush_evt.is_set():
-            try:
-                await ws.send(json.dumps({"type": "Flush"}))
-            except Exception:
-                pass
-            flush_evt.clear()
-
-        try:
-            buf = audio_q.get(timeout=0.02)
-        except queue.Empty:
-            await asyncio.sleep(0.005)
-            continue
-
-        if not sending_evt.is_set():
-            # Not recording -> discard stale chunk
-            continue
-
-        # Evaluate backlog; toggle catch-up mode
-        try:
-            qsz = audio_q.qsize()
-        except Exception:
-            qsz = 0
-
-        if catchup:
-            if qsz <= LOW_WATER:
-                catchup = False
-        else:
-            if qsz >= HIGH_WATER:
-                catchup = True
-
-        for i in range(0, len(buf), step):
-            if not sending_evt.is_set():
-                break
-            await ws.send(buf[i:i+step])
-            if not catchup:
-                await asyncio.sleep((CHUNK_MS / 1000.0) * 0.8)
-
-    # graceful close (best-effort)
-    try:
-        await ws.send(json.dumps({"type": "CloseStream"}))
-    except Exception:
-        pass
-
-
-# =======================
-# Per-session STT lifecycle (open on press, close on release)
-# =======================
-class STTSession:
-    """Holds per-press Deepgram connection + tasks."""
-    def __init__(self):
-        self.ws = None
-        self.prod = None
-        self.cons = None
-
-    def active(self) -> bool:
-        return self.ws is not None
-
-    async def start(self, url: str, hdrs: dict):
-        """Open WS and start producer/consumer tasks."""
-        if self.active():
-            return
-        self.ws = await ws_connect(url, hdrs)
-        if VERBOSE:
-            print("[stt] connected")
-        self.prod = asyncio.create_task(producer_with_catchup(self.ws, AUDIO_Q, SENDING_AUDIO, FLUSH_REQUEST, SHOULD_STOP))
-        self.cons = asyncio.create_task(consumer(self.ws, COLLECTING, SESSION_BUFFER, ASYNC_LOCK))
-
-    async def stop(self):
-        """Stop tasks and close WS gracefully."""
-        if not self.active():
-            return
-        # Cancel tasks if running
-        for t in (self.prod, self.cons):
-            if t and not t.done():
-                t.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await t
-        # Close websocket
-        try:
-            await self.ws.close()
-        except Exception:
-            pass
-        self.ws = None
-        self.prod = None
-        self.cons = None
-        if VERBOSE:
-            print("[stt] disconnected")
-
-
-# =======================
-# Spacebar-only keyloop (prebuffer + connect-on-demand)
-# =======================
-async def keyloop(url: str, hdrs: dict, stt_session: STTSession):
+async def keyloop():
     was_down = False
     press_ts_ms = 0.0
 
@@ -232,7 +122,6 @@ async def keyloop(url: str, hdrs: dict, stt_session: STTSession):
         print("[ready]")
 
     while not SHOULD_STOP.is_set():
-        # Drain worker notifications
         try:
             while True:
                 msg = CTRL_Q.get_nowait()
@@ -256,46 +145,26 @@ async def keyloop(url: str, hdrs: dict, stt_session: STTSession):
             else:
                 space_up_confirm_ms = 0.0
 
-        # Edge: SPACE pressed
         if now_down and not was_down:
             press_ts_ms = time.monotonic() * 1000.0
 
-        # Start recording: arm immediately (prebuffer), then connect WS
         if (not waiting_tts_done) and (not waiting_space_up_after_tts) and now_down and not COLLECTING.is_set():
             if (time.monotonic() * 1000.0 - press_ts_ms) >= PRESS_DEBOUNCE_MS:
-                # Arm capture so chunks start filling AUDIO_Q right away
                 with SESSION_LOCK:
                     SESSION_BUFFER.clear()
                 COLLECTING.set()
                 SENDING_AUDIO.set()
-                if FLUSH_REQUEST and FLUSH_REQUEST.is_set():
-                    FLUSH_REQUEST.clear()
                 if VERBOSE:
                     print("\n[rec] START")
 
-                # Connect WS concurrently; any prebuffer will be flushed by producer_with_catchup
-                try:
-                    await stt_session.start(url, hdrs)
-                except Exception as e:
-                    print(f"[stt] connect error: {e!r}")
-                    # Disarm since we can't stream
-                    SENDING_AUDIO.clear()
-                    COLLECTING.clear()
-                    was_down = now_down
-                    await asyncio.sleep(POLL_INTERVAL_S)
-                    continue
-
-        # Edge: SPACE released → finalize and CLOSE WS
         if (not now_down) and was_down:
             await asyncio.sleep(RELEASE_DEBOUNCE_MS / 1000.0)
             if COLLECTING.is_set():
                 if VERBOSE:
                     print("\n[rec] STOP")
-                await finalize_session()      # stops capture + flushes finals + enqueues job
+                await finalize_session()
                 COLLECTING.clear()
-                # Close WS and STT tasks (we're done with this press)
-                await stt_session.stop()
-                waiting_tts_done = True       # block new starts until playback completes
+                waiting_tts_done = True
 
         was_down = now_down
         await asyncio.sleep(POLL_INTERVAL_S)
@@ -340,12 +209,58 @@ async def process_job_worker(worker_id: int):
 
 
 # =======================
+# STT connection watchdog
+# =======================
+async def stt_run_forever():
+    url  = deepgram_url()
+    hdrs = {"Authorization": f"Token {DG_API_KEY}", "Content-Type": "application/octet-stream"}
+
+    backoff_seq = [2, 5, 10]
+    attempt = 0
+
+    while not SHOULD_STOP.is_set():
+        try:
+            async with (await ws_connect(url, hdrs)) as ws:
+                if VERBOSE:
+                    print("[stt] connected")
+
+                prod = asyncio.create_task(producer(ws, AUDIO_Q, SENDING_AUDIO, FLUSH_REQUEST, SHOULD_STOP))
+                cons = asyncio.create_task(consumer(ws, COLLECTING, SESSION_BUFFER, ASYNC_LOCK))
+
+                done, pending = await asyncio.wait(
+                    {prod, cons},
+                    return_when=asyncio.FIRST_COMPLETED
+                )
+
+                for t in pending:
+                    t.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await t
+
+                for t in done:
+                    exc = t.exception()
+                    if exc and VERBOSE:
+                        print(f"[stt] task ended with error: {exc!r}")
+
+        except Exception as e:
+            if VERBOSE:
+                print(f"[stt] connect error: {e!r}")
+
+        if SHOULD_STOP.is_set():
+            break
+
+        delay = backoff_seq[min(attempt, len(backoff_seq) - 1)]
+        if VERBOSE:
+            print(f"[stt] reconnecting in {delay}s …")
+        await asyncio.sleep(delay)
+        attempt += 1
+
+
+# =======================
 # Main
 # =======================
 async def main():
     global FLUSH_REQUEST
-    com.try_attach()
-
     di, info = choose_device()
     src = int(info.get("default_samplerate") or 48000)
     src = src if src >= 8000 else 16000
@@ -373,18 +288,9 @@ async def main():
 
     FLUSH_REQUEST = asyncio.Event()
 
-    # Prepare static STT connection params
-    url  = deepgram_url()
-    hdrs = {"Authorization": f"Token {DG_API_KEY}", "Content-Type": "application/octet-stream"}
-
-    # Per-press STT session holder
-    stt_session = STTSession()
-
-    # Workers for LLM+TTS
     workers = [asyncio.create_task(process_job_worker(i)) for i in range(N_WORKERS)]
-
-    # Key loop (opens/closes STT per press, with prebuffer)
-    key_task = asyncio.create_task(keyloop(url, hdrs, stt_session))
+    stt_task = asyncio.create_task(stt_run_forever())
+    key_task = asyncio.create_task(keyloop())
 
     with stream:
         await key_task
@@ -392,8 +298,9 @@ async def main():
         SENDING_AUDIO.clear()
         COLLECTING.clear()
 
-        # Ensure STT session is closed if still open
-        await stt_session.stop()
+        stt_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await stt_task
 
     await JOB_Q.join()
     for w in workers:
