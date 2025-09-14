@@ -77,3 +77,6 @@ def serial_ports():
         except (OSError, serial.SerialException):
             pass
     return result
+
+#Button - GP3 (pressed = low)
+#Servo -GP002 pwm 
